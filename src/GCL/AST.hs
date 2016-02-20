@@ -101,7 +101,7 @@ class HasPrecedence op => BinaryOperator op where
   associativity :: op -> Assoc
 
 prettyBinOp :: (BinaryOperator op, PP.Pretty op) => op -> (Int -> PP.Doc) -> (Int -> PP.Doc) -> Precedence -> PP.Doc
-prettyBinOp op l r reqPrec = withParens (precOp < reqPrec) $ PP.sep [l lprec, PP.pretty op, r rprec] where
+prettyBinOp op l r reqPrec = withParens (precOp < reqPrec) $ l lprec PP.<+> PP.pretty op PP.</> r rprec where
   precOp = precedence op
   assocOp = associativity op
   lprec  = if assocOp == LeftAssoc then precOp else precOp + 1
@@ -193,8 +193,8 @@ instance PP.Pretty Statement where
   pretty (Assume e) = ppkeyword "assume" PP.<+> PP.pretty e
   pretty (Assign as) = PP.hang 2 (lpretty PP.<+> ":=" PP.</> rpretty) where
     (lvals, rvals) = unzip as
-    lpretty = PP.cat (PP.punctuate PP.comma (map PP.pretty lvals))
-    rpretty = PP.cat (PP.punctuate PP.comma (map PP.pretty rvals))
+    lpretty = PP.fillSep (PP.punctuate PP.comma (map PP.pretty lvals))
+    rpretty = PP.fillSep (PP.punctuate PP.comma (map PP.pretty rvals))
 
   pretty (Block stmts) = PP.sep (PP.punctuate PP.semi (map PP.pretty stmts))
 
@@ -226,7 +226,7 @@ instance PP.Pretty Statement where
       PP.</> ppkeyword "end"
 
 instance PP.Pretty Program where
-  pretty (Program name inargs outargs stmt) = ppident (PP.text name) <> PP.align (PP.lparen PP.<+> argList PP.<+> PP.rparen) PP.<+> body where
-    argList = PP.sep (PP.punctuate PP.comma (map PP.pretty inargs))
-        PP.</> "|" PP.<+> PP.sep (PP.punctuate PP.comma (map PP.pretty outargs))
+  pretty (Program name inargs outargs stmt) = ppident (PP.text name) <> PP.hang 2 (PP.lparen PP.<+> argList PP.<+> PP.rparen) PP.<+> body where
+    argList = PP.fillSep (PP.punctuate PP.comma (map PP.pretty inargs))
+        PP.<+> "|" PP.</> PP.fillSep (PP.punctuate PP.comma (map PP.pretty outargs))
     body = PP.lbrace PP.<$$> PP.indent 2 (PP.pretty stmt) PP.<$$> PP.rbrace
