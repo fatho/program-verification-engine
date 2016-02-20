@@ -2,7 +2,7 @@
 {- | Contains the AST of the Guarded Common Language.
 -}
 module GCL.AST where
-    
+
 import Data.String
 
 type Name = String
@@ -10,19 +10,17 @@ type Variable = Name
 
 data Type = BoolType | IntType | ArrayType Type
 
-data RelOp = OpLEQ
+data Operator = OpLEQ
            | OpEQ
            | OpGEQ
            | OpLT
            | OpGT
-
-data IntOp = OpPlus
+           | OpPlus
            | OpMinus
            | OpTimes
-
-data BoolOp = OpImplies
-            | OpAnd
-            | OpOr
+           | OpImplies
+           | OpAnd
+           | OpOr
 
 data Program = Program Name [Decl] [Decl] Statement
 
@@ -40,9 +38,7 @@ data Statement = Skip
 data Expression = IntLit Int
                 | BoolLit Bool
                 | Ref Name
-                | BoolOp BoolOp Expression Expression
-                | IntOp IntOp Expression Expression
-                | RelOp RelOp Expression Expression
+                | ExpOp Operator Expression Expression
                 | Index Expression Expression
                 | RepBy Expression Expression Expression
                 | NegExp Expression
@@ -57,19 +53,19 @@ data Expression (v :: Valueness) (t :: Type) where
   IntLit  :: Int -> Expression 'RValue 'TInt
   BoolLit :: Bool -> Expression 'RValue 'TBool
   Ref     :: Name -> Expression 'LValue t
-  RelOp   :: Expression v1 'TInt 
-          -> RelOp 
+  RelOp   :: Expression v1 'TInt
+          -> RelOp
           -> Expression v2 'TInt
           -> Expression 'RValue 'TBool
   BoolOp  :: Expression v1 'TBool
           -> RelOp
           -> Expression v2 'TBool
           -> Expression 'RValue 'TBool
-  IntOp   :: Expression v1 'TInt 
+  IntOp   :: Expression v1 'TInt
           -> RelOp
           -> Expression v2 'TInt
           -> Expression 'RValue 'TInt
-  Index   :: Expression v1 ('TArray el) 
+  Index   :: Expression v1 ('TArray el)
           -> Expression v2 'TInt
           -> Expression 'RValue el
   RepBy   :: Expression v1 ('TArray el)
@@ -79,12 +75,12 @@ data Expression (v :: Valueness) (t :: Type) where
   BoolNeg :: Expression v 'TBool -> Expression 'RValue 'TBool
   ForAll  :: Variable -> Expression v 'TBool -> Expression 'RValue 'TBool
 -}
-
-instance Num Expression where
-  (+) = IntOp OpPlus
-  (-) = IntOp OpMinus
-  (*) = IntOp OpTimes
-  fromInteger = IntLit . fromInteger
-
-instance IsString Expression where
-  fromString = Ref
+-- 
+-- instance Num Expression where
+--   (+) = IntOp OpPlus
+--   (-) = IntOp OpMinus
+--   (*) = IntOp OpTimes
+--   fromInteger = IntLit . fromInteger
+--
+-- instance IsString Expression where
+--   fromString = Ref
