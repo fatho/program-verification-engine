@@ -13,15 +13,21 @@ import           Data.Monoid
 import           Data.String
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
+-- | The type of names.
 type Name = String
 
+-- | Available types in our verification engine.
 data Type = BoolType | IntType | ArrayType Type
   deriving (Eq, Ord, Show, Read)
 
+-- | Kind to distinguish qualified and unqualified variable references.
 data Qualification = Qualified | Unqualified
 
+-- | Reference to a variable.
 data Var (q :: Qualification) where
+  -- | An unqualified reference to a variable, meaning depends on scope.
   UVar :: Name -> Var Unqualified
+  -- | Fully qualified and unique reference to a variable.
   QVar :: [Name] -> Int -> Type -> Var Qualified
 
 deriving instance Eq (Var q)
@@ -34,28 +40,29 @@ instance IsString (Var Unqualified) where
 type QualifiedVar = Var Qualified
 type UnqualifiedVar = Var Unqualified
 
-data RelOp = OpLEQ
-           | OpEQ
-           | OpGEQ
-           | OpLT
-           | OpGT
-  deriving (Show)
+-- | Available relational operators.
+data RelOp = OpLEQ -- ^ Less than or equal
+           | OpEQ  -- ^ Equal
+           | OpGEQ -- ^ Greater than or equal
+           | OpLT  -- ^ Less than
+           | OpGT  -- ^ Greater than
+  deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 data IntOp = OpPlus
            | OpMinus
            | OpTimes
-  deriving (Show)
+  deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 data BoolOp = OpImplies
             | OpAnd
             | OpOr
-  deriving (Show)
+  deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 data Program = Program Name [Decl Qualified] [Decl Qualified] Statement
-  deriving (Show)
+  deriving (Eq, Ord, Show)
 
 data Decl (q :: Qualification) = Decl (Var q) Type
-  deriving (Show)
+  deriving (Eq, Ord, Show)
 
 data Statement = Skip
                | Assert Expression
@@ -65,7 +72,7 @@ data Statement = Skip
                | NDet Statement Statement
                | While Expression Expression Statement
                | Var [Decl Qualified] Statement
-  deriving (Show)
+  deriving (Eq, Ord, Show)
 
 data Expression = IntLit Int
                 | BoolLit Bool
@@ -77,7 +84,7 @@ data Expression = IntLit Int
                 | RepBy Expression Expression Expression
                 | NegExp Expression
                 | ForAll (Decl Qualified) Expression
-  deriving (Show)
+  deriving (Eq, Ord, Show)
 
 
 -- * Pretty Printing
@@ -190,8 +197,22 @@ instance PP.Pretty Statement where
     rpretty = PP.cat (PP.punctuate PP.comma (map PP.pretty rvals))
 
   pretty (Block stmts) = PP.sep (PP.punctuate PP.semi (map PP.pretty stmts))
-  pretty (NDet s1 s2) = undefined
-  pretty (While inv cond body) = undefined
+
+  -- restore if expression
+  pretty (NDet (Block (Assume g:s1)) (Block (Assume ng:s2)))
+    | NegExp g == ng = ppkeyword "if" PP.<+> PP.align (PP.pretty g) PP.<+> ppkeyword "then" PP.<+> PP.lbrace
+        PP.<$$> PP.indent 2 (PP.pretty (Block s1))
+        PP.<$$> PP.rbrace PP.<+> ppkeyword "else" PP.<+> PP.lbrace
+        PP.<$$> PP.indent 2 (PP.pretty (Block s2))
+        PP.<$$> PP.rbrace
+
+  pretty (NDet s1 s2) = PP.lbrace PP.<+> (PP.align $ PP.pretty s1) PP.</> PP.rbrace
+      PP.<+> "[]" PP.<+> PP.lbrace PP.<+> (PP.align $ PP.pretty s2) PP.</> PP.rbrace
+
+  pretty (While inv cond body) =
+      ppkeyword "inv" PP.<+> PP.pretty inv PP.</>
+      ppkeyword "while" PP.<+> PP.align (PP.pretty cond PP.</> ppkeyword "do") PP.<+> PP.lbrace PP.<$$>
+      PP.indent 2 (PP.pretty body) PP.<$$> PP.rbrace
 
   pretty (Var decls blk@(Block _)) =
       ppkeyword "var" PP.<+> PP.align (PP.cat (PP.punctuate PP.comma (map PP.pretty decls)))
