@@ -1,44 +1,54 @@
 {-# LANGUAGE LambdaCase #-}
 module WLP.Wlp where
 
-import GCL.AST
 import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as M
 import Z3.Monad
 
+import qualified GCL.AST             as AST
+import qualified GCL.DSL             as DSL
+
+import           Control.Lens.Plated
+
+type Predicate = AST.Expression
+
+subst :: [(AST.QVar, AST.Expression)] -> Predicate -> Predicate
+subst sub = transform $ \case
+  v@(AST.Ref name) -> fromMaybe v (lookup name sub)
+  -- we don't need to worry about the binding of "foralls" at this
+  -- point since the names have already been made unique
+  other           -> other
 
 
-subst :: (QVar, Expression) -> Expression -> Expression
-subst = undefined
+wlp :: AST.Statement -> Predicate -> Predicate
+wlp AST.Skip q = q
+wlp (AST.Assign as) q = subst as q
+wlp (AST.Block stmts) q = foldr wlp q stmts
+wlp (AST.Assert e) q =  e DSL.&& q
+wlp (AST.Assume e) q = e DSL.==> q
+wlp (AST.NDet s t) q = wlp s q DSL.&& wlp t q
 
-wlp :: Statement -> Expression -> Expression
-wlp Skip q = q
-wlp (Assign e) q = foldr subst q e
-wlp (Block stmts) q = foldr wlp q stmts
-wlp (Assert e) q = BinOp OpAnd e q
-wlp (Assume e) q = BinOp OpImplies e q
-wlp (NDet s t) q = BinOp OpAnd (wlp s q) (wlp t q)
 
 ---- Z3 ----
 
 
-type Env = Map QVar (Z3 AST)
+type Env = Map (AST.QVar) (Z3 AST)
 
-mkExp :: Expression -> Env -> Z3 AST
-mkExp (Ref n) e = fromJust $ M.lookup n e
-mkExp (IntLit n) _ = mkInteger $ toInteger n
-mkExp (BoolLit b) _ = mkBool b
-mkExp (BinOp op _e1 _e2) env = do
+mkExp :: Predicate -> Env -> Z3 AST
+mkExp (AST.Ref n) e = fromJust $ M.lookup n e
+mkExp (AST.IntLit n) _ = mkInteger $ toInteger n
+mkExp (AST.BoolLit b) _ = mkBool b
+mkExp (AST.BinOp op _e1 _e2) env = do
   e1 <- mkExp _e1 env
   e2 <- mkExp _e2 env
   mkOp op e1 e2
 
-mkOp :: Operator -> AST -> AST -> Z3 AST
-mkOp OpPlus v1 v2 = mkAdd [v1, v2]
-mkOp OpMinus v1 v2 = mkSub [v1, v2]
-mkOp OpImplies v1 v2 = mkImplies v1 v2
-mkOp OpAnd v1 v2 = mkAnd [v1, v2]
+mkOp :: AST.Operator -> AST -> AST -> Z3 AST
+mkOp AST.OpPlus v1 v2 = mkAdd [v1, v2]
+mkOp AST.OpMinus v1 v2 = mkSub [v1, v2]
+mkOp AST.OpImplies v1 v2 = mkImplies v1 v2
+mkOp AST.OpAnd v1 v2 = mkAnd [v1, v2]
 
 {-
 
