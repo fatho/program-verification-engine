@@ -24,6 +24,7 @@ import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.RWS
 import           Data.Foldable
+import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as Map
 import           Data.String
 
@@ -34,14 +35,14 @@ import           Data.String
 data VarInfo = VarInfo
   { _varType          :: AST.Type
   -- ^ The type of the variable as given in the declaration.
-  , _varQualifiedName :: AST.QualifiedVar
+  , _varQualifiedName :: AST.QVar
   -- ^ The fully qualified name of the variable, unqiue in the program.
   }
 makeLenses ''VarInfo
 
 -- | Environment with information needed during code generation.
 data CodeGenEnv = CodeGenEnv
-  { _declarations    :: Map.Map AST.UnqualifiedVar VarInfo
+  { _declarations    :: Map AST.UVar VarInfo
   , _qualifiedPrefix :: [AST.Name]
   }
 makeLenses ''CodeGenEnv
@@ -85,7 +86,7 @@ extractStmt :: Code () -> Code AST.Statement
 extractStmt = fmap AST.Block . extractCode
 
 -- | Declares a program.
-program :: AST.Name -> [AST.Decl AST.Unqualified] -> [AST.Decl AST.Unqualified] -> Code () -> Either GclError AST.Program
+program :: AST.Name -> [AST.Decl AST.UVar] -> [AST.Decl AST.UVar] -> Code () -> Either GclError AST.Program
 program name inputVars outputVars code = fst <$> evalCode ast initEnv initState where
   ast = declare inputVars $ \qinput ->
       declare outputVars $ \qoutput ->
@@ -103,7 +104,7 @@ unique :: Code Int
 unique = nextUnique <<+= 1
 
 -- | Creates a new qualified name.
-mkQualifiedVar :: AST.UnqualifiedVar -> AST.Type -> Code AST.QualifiedVar
+mkQualifiedVar :: AST.UVar -> AST.Type -> Code AST.QVar
 mkQualifiedVar (AST.UVar name) ty = do
   id <- unique
   pr <- view qualifiedPrefix
@@ -114,7 +115,7 @@ nested :: [AST.Name] -> Code a -> Code a
 nested prefix = local (qualifiedPrefix %~ (++ prefix))
 
 -- | Declares new variables.
-declare :: [AST.Decl AST.Unqualified] -> ([AST.Decl AST.Qualified] -> Code a) -> Code a
+declare :: [AST.Decl AST.UVar] -> ([AST.Decl AST.QVar] -> Code a) -> Code a
 declare udecls body = do
   let newDecl (AST.Decl uv ty) (scope, decls)
         | Map.member uv scope = throwError "duplicate declaration in var"
@@ -139,13 +140,13 @@ array = AST.ArrayType
 
 -- | Syntactic sugar for declarations.
 -- Example: @"foo" `as` array int@
-as :: AST.UnqualifiedVar -> AST.Type -> AST.Decl AST.Unqualified
+as :: AST.UVar -> AST.Type -> AST.Decl AST.UVar
 as = AST.Decl
 
 -- * Expression DSL
 
 -- | Searches for the qualified name of an unqualified reference in the current scope.
-lookupVar :: AST.UnqualifiedVar -> Code AST.QualifiedVar
+lookupVar :: AST.UVar -> Code AST.QVar
 lookupVar uv@(AST.UVar name) = views declarations (Map.lookup uv) >>= \case
   Nothing -> throwError $ "variable '" ++ name ++ "' not declared"
   Just vi -> return $ view varQualifiedName vi
@@ -167,7 +168,7 @@ false :: Code AST.Expression
 false = litB False
 
 -- | Creates a qualified reference from an unqualified name.
-ref  :: AST.UnqualifiedVar -> Code AST.Expression
+ref  :: AST.UVar -> Code AST.Expression
 ref uv = AST.Ref <$> lookupVar uv
 
 -- | Applies a binary boolean operator.
@@ -195,10 +196,10 @@ neg :: Code AST.Expression -> Code AST.Expression
 neg = liftM AST.NegExp
 
 -- | Creates a forall quantifier.
-forall :: AST.Decl AST.Unqualified -> Code AST.Expression -> Code AST.Expression
+forall :: AST.Decl AST.UVar -> Code AST.Expression -> Code AST.Expression
 forall udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.ForAll qdecl) quantExp
 
-exists :: AST.Decl AST.Unqualified -> Code AST.Expression -> Code AST.Expression
+exists :: AST.Decl AST.UVar -> Code AST.Expression -> Code AST.Expression
 exists udecl quantExp = neg $ forall udecl (neg quantExp)
 
 -- | The array index operator.
@@ -311,7 +312,7 @@ infix 0 $=
 ($=) :: Code AST.Expression -> Code AST.Expression -> Code ()
 ($=) lval rval = [lval] $$= [rval]
 
-var :: [AST.Decl AST.Unqualified] -> Code () -> Code ()
+var :: [AST.Decl AST.UVar] -> Code () -> Code ()
 var udecls body = declare udecls $ \qdecls -> do
   bodyStmt <- extractStmt body
   emit $ AST.Var qdecls bodyStmt

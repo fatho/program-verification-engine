@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
@@ -9,8 +10,12 @@
 -}
 module GCL.AST where
 
+import           Control.Lens.Plated
+import           Data.Data
+import           Data.Data.Lens
 import           Data.Monoid
 import           Data.String
+import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 -- | The type of names.
@@ -18,27 +23,18 @@ type Name = String
 
 -- | Available types in our verification engine.
 data Type = BoolType | IntType | ArrayType Type
-  deriving (Eq, Ord, Show, Read)
+  deriving (Eq, Ord, Show, Read, Data, Typeable)
 
--- | Kind to distinguish qualified and unqualified variable references.
-data Qualification = Qualified | Unqualified
+-- | An unqualified reference to a variable, meaning depends on scope.
+data UVar = UVar Name
+  deriving (Eq, Ord, Show, Data, Typeable)
 
--- | Reference to a variable.
-data Var (q :: Qualification) where
-  -- | An unqualified reference to a variable, meaning depends on scope.
-  UVar :: Name -> Var Unqualified
-  -- | Fully qualified and unique reference to a variable.
-  QVar :: [Name] -> Int -> Type -> Var Qualified
+-- | Fully qualified and unique reference to a variable.
+data QVar = QVar [Name] Int Type
+  deriving (Eq, Ord, Show, Data, Typeable)
 
-deriving instance Eq (Var q)
-deriving instance Ord (Var q)
-deriving instance Show (Var q)
-
-instance IsString (Var Unqualified) where
+instance IsString UVar where
   fromString = UVar
-
-type QualifiedVar = Var Qualified
-type UnqualifiedVar = Var Unqualified
 
 -- | Available relational operators.
 data RelOp = OpLEQ -- ^ Less than or equal
@@ -46,46 +42,51 @@ data RelOp = OpLEQ -- ^ Less than or equal
            | OpGEQ -- ^ Greater than or equal
            | OpLT  -- ^ Less than
            | OpGT  -- ^ Greater than
-  deriving (Eq, Ord, Show, Read, Enum, Bounded)
+  deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
 
 data IntOp = OpPlus
            | OpMinus
            | OpTimes
-  deriving (Eq, Ord, Show, Read, Enum, Bounded)
+  deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
 
 data BoolOp = OpImplies
             | OpAnd
             | OpOr
-  deriving (Eq, Ord, Show, Read, Enum, Bounded)
+  deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
 
-data Program = Program Name [Decl Qualified] [Decl Qualified] Statement
-  deriving (Eq, Ord, Show)
+data Program = Program Name [Decl QVar] [Decl QVar] Statement
+  deriving (Eq, Ord, Show, Data, Typeable)
 
-data Decl (q :: Qualification) = Decl (Var q) Type
-  deriving (Eq, Ord, Show)
+data Decl var = Decl var Type
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 data Statement = Skip
                | Assert Expression
                | Assume Expression
-               | Assign [(QualifiedVar, Expression)]
+               | Assign [(QVar, Expression)]
                | Block [Statement]
                | NDet Statement Statement
                | While Expression Expression Statement
-               | Var [Decl Qualified] Statement
-  deriving (Eq, Ord, Show)
+               | Var [Decl QVar] Statement
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 data Expression = IntLit Int
                 | BoolLit Bool
-                | Ref QualifiedVar
+                | Ref QVar
                 | BoolOp BoolOp Expression Expression
                 | IntOp IntOp Expression Expression
                 | RelOp RelOp Expression Expression
                 | Index Expression Expression
                 | RepBy Expression Expression Expression
                 | NegExp Expression
-                | ForAll (Decl Qualified) Expression
-  deriving (Eq, Ord, Show)
+                | ForAll (Decl QVar) Expression
+  deriving (Eq, Ord, Show, Data, Typeable)
 
+instance Plated Expression where
+  plate = uniplate
+
+instance Plated Statement where
+  plate = uniplate
 
 -- * Pretty Printing
 
@@ -163,14 +164,22 @@ instance PP.Pretty Type where
   pretty IntType = pptype "int"
   pretty BoolType = pptype "bool"
   pretty (ArrayType ty) = pptype $ "[]" PP.<+> PP.pretty ty
-
+{-
 instance PP.Pretty (Var q) where
   pretty (UVar name) = ppident $ PP.text name
   pretty (QVar names id ty) = PP.hcat (PP.punctuate PP.dot (prefix ++ [real])) <> "$" <> PP.pretty id where
     prefix = map PP.pretty $ init names
     real   = ppident $ PP.pretty $ last names
+-}
+instance PP.Pretty UVar where
+  pretty (UVar name) = ppident $ PP.text name
 
-instance PP.Pretty (Decl q) where
+instance PP.Pretty QVar where
+  pretty (QVar names id ty) = PP.hcat (PP.punctuate PP.dot (prefix ++ [real])) <> "$" <> PP.pretty id where
+    prefix = map PP.pretty $ init names
+    real   = ppident $ PP.pretty $ last names
+
+instance PP.Pretty var => PP.Pretty (Decl var) where
   pretty (Decl var ty) = PP.hsep [PP.pretty var, PP.colon, PP.pretty ty]
 
 instance PP.Pretty Expression where

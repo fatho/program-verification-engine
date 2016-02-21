@@ -1,16 +1,22 @@
+{-# LANGUAGE LambdaCase #-}
 module WLP.Wlp where
 
-import qualified GCL.AST  as AST
+import qualified GCL.AST             as AST
 
-import           Data.Map (Map)
-import qualified Data.Map as M
-import           Z3.Monad
+import           Control.Lens.Plated
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as Map
+import           Data.Maybe
 
 -- TODO: Maybe we need another representation for this
 type Predicate = AST.Expression
 
-subst :: AST.QualifiedVar -> AST.Expression -> Predicate -> Predicate
-subst = undefined
+subst :: [(AST.QVar, AST.Expression)] -> Predicate -> Predicate
+subst sub = transform $ \case
+  v@(AST.Ref name) -> fromMaybe v (lookup name sub)
+  -- we don't need to worry about the binding of "foralls" at this
+  -- point since the names have already been made unique
+  other           -> other
 
 (.&.) :: Predicate -> Predicate -> Predicate
 (.&.) = AST.BoolOp AST.OpAnd
@@ -20,7 +26,7 @@ subst = undefined
 
 wlp :: AST.Statement -> Predicate -> Predicate
 wlp AST.Skip q = q
-wlp (AST.Assign as) q = undefined
+wlp (AST.Assign as) q = subst as q
 wlp (AST.Block stmts) q = foldr wlp q stmts
 wlp (AST.Assert e) q = e .&. q
 wlp (AST.Assume e) q = e ==> q
