@@ -2,6 +2,7 @@
 module WLP.Wlp where
 
 import qualified GCL.AST             as AST
+import qualified GCL.DSL             as DSL
 
 import           Control.Lens.Plated
 import           Data.Map.Strict     (Map)
@@ -18,19 +19,13 @@ subst sub = transform $ \case
   -- point since the names have already been made unique
   other           -> other
 
-(.&.) :: Predicate -> Predicate -> Predicate
-(.&.) = AST.BoolOp AST.OpAnd
-
-(==>) :: Predicate -> Predicate -> Predicate
-(==>) = AST.BoolOp AST.OpImplies
-
 wlp :: AST.Statement -> Predicate -> Predicate
 wlp AST.Skip q = q
 wlp (AST.Assign as) q = subst as q
 wlp (AST.Block stmts) q = foldr wlp q stmts
-wlp (AST.Assert e) q = e .&. q
-wlp (AST.Assume e) q = e ==> q
-wlp (AST.NDet s t) q = wlp s q .&. wlp t q
+wlp (AST.Assert e) q = e DSL.&& q
+wlp (AST.Assume e) q = e DSL.==> q
+wlp (AST.NDet s t) q = wlp s q DSL.&& wlp t q
 
 {-
 

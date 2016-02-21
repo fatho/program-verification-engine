@@ -88,6 +88,13 @@ instance Plated Expression where
 instance Plated Statement where
   plate = uniplate
 
+-- | Allows the usage of the AST in arithmetic expressions.
+instance Num Expression where
+  (+) = IntOp OpPlus
+  (-) = IntOp OpMinus
+  (*) = IntOp OpTimes
+  fromInteger = IntLit . fromInteger
+
 -- * Pretty Printing
 
 type Precedence = Int

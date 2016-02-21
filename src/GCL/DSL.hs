@@ -8,6 +8,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
 {- | Contains an embedded domain specific language for generating a
 program in the Guarded Common Language represented by "GCL.AST".
 -}
@@ -151,112 +152,117 @@ lookupVar uv@(AST.UVar name) = views declarations (Map.lookup uv) >>= \case
   Nothing -> throwError $ "variable '" ++ name ++ "' not declared"
   Just vi -> return $ view varQualifiedName vi
 
--- | An integer literal.
-litI :: Int -> Code AST.Expression
-litI = return . AST.IntLit
-
--- | A boolean literal.
-litB :: Bool -> Code AST.Expression
-litB = return . AST.BoolLit
+class ExprAST ast where
+  type ExpVar ast :: *
+  litI   :: Int -> ast
+  litB   :: Bool -> ast
+  ref    :: ExpVar ast -> ast
+  boolOp :: AST.BoolOp -> ast -> ast -> ast
+  intOp  :: AST.IntOp -> ast -> ast -> ast
+  relOp  :: AST.RelOp -> ast -> ast -> ast
+  -- | Creates an array-indexing expression.
+  arrIndex :: ast -> ast -> ast
+  -- | Creates an array replacement expression.
+  repBy :: ast -> ast -> ast -> ast
+  -- | Creates a boolean negation.
+  neg :: ast -> ast
+  -- | Creates a forall quantifier.
+  forall :: AST.Decl (ExpVar ast) -> ast -> ast
 
 -- | A boolean true literal.
-true :: Code AST.Expression
+true :: ExprAST ast => ast
 true = litB True
 
 -- | A boolean false literal.
-false :: Code AST.Expression
+false :: ExprAST ast => ast
 false = litB False
 
--- | Creates a qualified reference from an unqualified name.
-ref  :: AST.UVar -> Code AST.Expression
-ref uv = AST.Ref <$> lookupVar uv
+instance ExprAST AST.Expression where
+  type ExpVar AST.Expression = AST.QVar
 
--- | Applies a binary boolean operator.
-boolOp :: AST.BoolOp -> Code AST.Expression -> Code AST.Expression -> Code AST.Expression
-boolOp bo = liftM2 (AST.BoolOp bo)
+  litI = AST.IntLit
+  litB = AST.BoolLit
+  ref = AST.Ref
+  boolOp = AST.BoolOp
+  intOp = AST.IntOp
+  relOp = AST.RelOp
+  arrIndex = AST.Index
+  repBy = AST.RepBy
+  neg = AST.NegExp
+  forall = AST.ForAll
 
--- | Applies a binary integer operator.
-intOp  :: AST.IntOp -> Code AST.Expression -> Code AST.Expression -> Code AST.Expression
-intOp io = liftM2 (AST.IntOp io)
+instance ExprAST (Code AST.Expression) where
+  type ExpVar (Code AST.Expression) = AST.UVar
 
--- | Applies a binary relational operator.
-relOp  :: AST.RelOp -> Code AST.Expression -> Code AST.Expression -> Code AST.Expression
-relOp ro = liftM2 (AST.RelOp ro)
+  litI = return . AST.IntLit
+  litB = return . AST.BoolLit
+  ref uv = AST.Ref <$> lookupVar uv
+  boolOp bo = liftM2 (AST.BoolOp bo)
+  intOp io = liftM2 (AST.IntOp io)
+  relOp ro = liftM2 (AST.RelOp ro)
+  arrIndex = liftM2 AST.Index
+  repBy arr idx expr = liftM3 AST.RepBy arr idx expr
+  neg = liftM AST.NegExp
+  forall udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.ForAll qdecl) quantExp
 
--- | Creates an array-indexing expression.
-arrIndex :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
-arrIndex = liftM2 AST.Index
-
--- | Creates an array replacement expression.
-repBy :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression -> Code AST.Expression
-repBy arr idx expr = liftM3 AST.RepBy arr idx expr
-
--- | Creates a boolean negation.
-neg :: Code AST.Expression -> Code AST.Expression
-neg = liftM AST.NegExp
-
--- | Creates a forall quantifier.
-forall :: AST.Decl AST.UVar -> Code AST.Expression -> Code AST.Expression
-forall udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.ForAll qdecl) quantExp
-
-exists :: AST.Decl AST.UVar -> Code AST.Expression -> Code AST.Expression
+exists :: ExprAST ast => AST.Decl (ExpVar ast) -> ast -> ast
 exists udecl quantExp = neg $ forall udecl (neg quantExp)
 
 -- | The array index operator.
 infixl 9 !
-(!) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(!) :: ExprAST ast => ast -> ast -> ast
 (!) = arrIndex
 
 infixr 3 /\
-(/\) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(/\) :: ExprAST ast => ast -> ast -> ast
 (/\) = boolOp AST.OpAnd
 
 infixr 2 \/
-(\/) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(\/) :: ExprAST ast => ast -> ast -> ast
 (\/) = boolOp AST.OpOr
 
 infixr 3 ∧
-(∧) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(∧) :: ExprAST ast => ast -> ast -> ast
 (∧) = (/\)
 
 infixr 2 ∨
-(∨) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(∨) :: ExprAST ast => ast -> ast -> ast
 (∨) = (\/)
 
 infixr 3 &&
-(&&) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(&&) :: ExprAST ast => ast -> ast -> ast
 (&&) = (/\)
 
 infixr 2 ||
-(||) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(||) :: ExprAST ast => ast -> ast -> ast
 (||) = (\/)
 
 infixr 1 ==>
-(==>) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(==>) :: ExprAST ast => ast -> ast -> ast
 (==>) = boolOp AST.OpImplies
 
 infix 4 <=
-(<=) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(<=) :: ExprAST ast => ast -> ast -> ast
 (<=) = relOp AST.OpLEQ
 
 infix 4 >=
-(>=) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(>=) :: ExprAST ast => ast -> ast -> ast
 (>=) = relOp AST.OpGEQ
 
 infix 4 >
-(>) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(>) :: ExprAST ast => ast -> ast -> ast
 (>) = relOp AST.OpGT
 
 infix 4 <
-(<) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(<) :: ExprAST ast => ast -> ast -> ast
 (<) = relOp AST.OpLT
 
 infix 4 ==
-(==) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(==) :: ExprAST ast => ast -> ast -> ast
 (==) = relOp AST.OpEQ
 
 infix 4 /=
-(/=) :: Code AST.Expression -> Code AST.Expression -> Code AST.Expression
+(/=) :: ExprAST ast => ast -> ast -> ast
 (/=) x y = neg (x == y)
 
 -- | Allows the usage of strings directly as references in our AST.
