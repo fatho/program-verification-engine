@@ -1,13 +1,18 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 module WLP.Wlp where
 
-import Data.Maybe
-import Data.Map (Map)
-import qualified Data.Map as M
-import Z3.Monad
+import           Control.Monad
+import           Control.Monad.Reader
+import           Control.Monad.Writer
+import           Data.Foldable
+import           Data.Map             (Map)
+import qualified Data.Map             as M
+import           Data.Maybe
 
-import qualified GCL.AST             as AST
-import qualified GCL.DSL             as DSL
+import qualified GCL.AST              as AST
+import           GCL.DSL
+import qualified WLP.Prover           as Prover
 
 import           Control.Lens.Plated
 
@@ -20,18 +25,39 @@ subst sub = transform $ \case
   -- point since the names have already been made unique
   other           -> other
 
-
-wlp :: AST.Statement -> Predicate -> Predicate
-wlp AST.Skip q = q
-wlp (AST.Assign as) q = subst as q
-wlp (AST.Block stmts) q = foldr wlp q stmts
-wlp (AST.Assert e) q =  e DSL.&& q
-wlp (AST.Assume e) q = e DSL.==> q
-wlp (AST.NDet s t) q = wlp s q DSL.&& wlp t q
-
+wlp :: Monad m => Prover.Backend m -> AST.Statement -> Predicate -> m Predicate
+wlp backend s q = AST.simplifyExpr <$> go s q where
+  go AST.Skip q          = return q
+  go (AST.Assign as) q   = return (subst as q)
+  go (AST.Block stmts) q = foldrM go q stmts
+  go (AST.Assert e) q =  return (e /\ q)
+  go (AST.Assume e) q = return (e ==> q)
+  go (AST.NDet s t) q = (/\) <$> go s q <*> go t q
+  go (AST.Var decls s) q = do
+    inner <- go s q
+    -- only introduce quantifier, if the variable being quantified over is referred to inside
+    -- this transformation is only valid if the type we're quantifying over is not empty,
+    -- which is given in our case with those trivial types.
+    foldrM (\d@(AST.Decl v _) r ->
+      if AST.containsVar v inner
+        then return (forall d r)
+        else return r) inner decls
+  go (AST.While iv cnd s) q = do
+    preInv <- go s iv
+    let preserveInv = iv /\ cnd ==> preInv
+        postcnd     = iv /\ neg cnd ==> q
+        -- pass simplified expression to prover: it's easier to read & debug for humans
+        -- (provided there's no error in the simplifier of course)
+        theorem     = AST.simplifyExpr (preserveInv /\ postcnd)
+    Prover.valid backend theorem >>= \case
+      -- if the invariant is preserved and we can prove the post-condition when exiting the loop,
+      -- we only require that the invariant holds in the beginning
+      True -> return iv
+      -- otherwise, we require that loop is never executed in addition to the post-condition
+      False -> return (neg cnd /\ q)
 
 ---- Z3 ----
-
+{-
 
 type Env = Map (AST.QVar) (Z3 AST)
 
@@ -49,7 +75,7 @@ mkOp AST.OpPlus v1 v2 = mkAdd [v1, v2]
 mkOp AST.OpMinus v1 v2 = mkSub [v1, v2]
 mkOp AST.OpImplies v1 v2 = mkImplies v1 v2
 mkOp AST.OpAnd v1 v2 = mkAnd [v1, v2]
-
+-}
 {-
 
 TODO: Separate Prover Backend from WLP transformer (Modularity rules!)

@@ -18,7 +18,9 @@ cabal-version:       >=1.10
 library
   exposed-modules:     GCL.AST
                      , GCL.DSL
+                     , WLP.Prover
                      , WLP.Wlp
+                     , WLP.Z3
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.8 && <4.9

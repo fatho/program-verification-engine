@@ -3,6 +3,7 @@ module Main where
 
 import qualified GCL.AST                      as GCL
 import qualified GCL.DSL                      as GCL
+import qualified WLP.Prover                   as Prover
 import qualified WLP.Wlp                      as WLP
 
 import           Control.Monad
@@ -14,6 +15,23 @@ import           TestPrograms
 prettyPrint :: PP.Pretty a => Int -> a -> IO ()
 prettyPrint width = PP.displayIO stdout . PP.renderPretty 0.8 width . PP.pretty
 
+-- | A prover backend that asks for help via stdin/stdout.
+interactiveProver :: Prover.Backend IO
+interactiveProver = Prover.Backend
+    { Prover.satisfiable = ask "satisfiable?"
+    , Prover.valid = ask "valid?"
+    }
+  where
+    ask q e = do
+      putStr ": " >> prettyPrint 100 e >> putStrLn ""
+      putStr (q ++ " [y/n]") >> hFlush stdout
+      getLine >>= \case
+        "n" -> return False
+        "y" -> return True
+        _   -> do
+            putStrLn "invalid answer"
+            ask q e
+
 main :: IO ()
 main = forM_ allPrograms $ \case
   Left err -> putStrLn err
@@ -21,6 +39,7 @@ main = forM_ allPrograms $ \case
     prettyPrint 100 prog
     putStrLn ""
     putStrLn ""
-    prettyPrint 100 $ WLP.wlp s (GCL.BoolLit True)
+    precond <- WLP.wlp interactiveProver s (GCL.BoolLit True)
+    prettyPrint 100 $ precond
     putStrLn ""
     putStrLn ""

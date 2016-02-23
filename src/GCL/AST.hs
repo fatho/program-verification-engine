@@ -9,7 +9,7 @@
 {- | Contains the AST of the Guarded Common Language.
 -}
 module GCL.AST where
-import Data.String
+import           Data.String
 
 import           Control.Lens.Plated
 import           Data.Data
@@ -18,6 +18,8 @@ import           Data.Monoid
 import           Data.String
 import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
+
+import           Debug.Trace
 
 -- | The type of names.
 type Name = String
@@ -35,16 +37,16 @@ data QVar = QVar [Name] Int Type
   deriving (Eq, Ord, Show, Data, Typeable)
 
 data Operator = OpLEQ
-           | OpEQ
-           | OpGEQ
-           | OpLT
-           | OpGT
-           | OpPlus
-           | OpMinus
-           | OpTimes
-           | OpImplies
-           | OpAnd
-           | OpOr
+              | OpEQ
+              | OpGEQ
+              | OpLT
+              | OpGT
+              | OpPlus
+              | OpMinus
+              | OpTimes
+              | OpImplies
+              | OpAnd
+              | OpOr
   deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
 
 instance IsString UVar where
@@ -76,46 +78,6 @@ data Expression = IntLit Int
                 | ForAll (Decl QVar) Expression
   deriving (Eq, Ord, Show, Data, Typeable)
 
-{-
-data Valueness = LValue | RValue
-
-data Type = TInt | TBool | TArray Type
-
-data Expression (v :: Valueness) (t :: Type) where
-  IntLit  :: Int -> Expression 'RValue 'TInt
-  BoolLit :: Bool -> Expression 'RValue 'TBool
-  Ref     :: Name -> Expression 'LValue t
-  RelOp   :: Expression v1 'TInt
-          -> RelOp
-          -> Expression v2 'TInt
-          -> Expression 'RValue 'TBool
-  BoolOp  :: Expression v1 'TBool
-          -> RelOp
-          -> Expression v2 'TBool
-          -> Expression 'RValue 'TBool
-  IntOp   :: Expression v1 'TInt
-          -> RelOp
-          -> Expression v2 'TInt
-          -> Expression 'RValue 'TInt
-  Index   :: Expression v1 ('TArray el)
-          -> Expression v2 'TInt
-          -> Expression 'RValue el
-  RepBy   :: Expression v1 ('TArray el)
-          -> Expression v2 'TInt
-          -> Expression v3 el
-          -> Expression 'RValue ('TArray el)
-  BoolNeg :: Expression v 'TBool -> Expression 'RValue 'TBool
-  ForAll  :: Variable -> Expression v 'TBool -> Expression 'RValue 'TBool
--}
---
--- instance Num Expression where
---   (+) = IntOp OpPlus
---   (-) = IntOp OpMinus
---   (*) = IntOp OpTimes
---   fromInteger = IntLit . fromInteger
---
--- instance IsString Expression where
---   fromString = Ref
 instance Plated Expression where
   plate = uniplate
 
@@ -128,6 +90,62 @@ instance Num Expression where
   (-) = BinOp OpMinus
   (*) = BinOp OpTimes
   fromInteger = IntLit . fromInteger
+
+-- * Simplification
+
+containsVar :: AST.QVar -> Predicate -> Bool
+containsVar v p = AST.Ref v `elem` universe p
+
+simplifyExpr :: Expression -> Expression
+simplifyExpr = transform rules where
+  rules = foldr1 (.) [neutral, imprules, constprop, boolElim, reflexiveRel, arrayAccess]
+
+  -- exploiting neutral elements of those operations
+  neutral (BinOp OpPlus    (IntLit 0)      x) = x
+  neutral (BinOp OpMinus   (IntLit 0)      x) = x
+  neutral (BinOp OpTimes   (IntLit 1)      x) = x
+  neutral (BinOp OpAnd     (BoolLit True)  x) = x
+  neutral (BinOp OpOr      (BoolLit False) x) = x
+  -- symmetric rules to the above
+  neutral (BinOp OpPlus    x (IntLit 0)     ) = x
+  neutral (BinOp OpMinus   x (IntLit 0)     ) = x
+  neutral (BinOp OpTimes   x (IntLit 1)     ) = x
+  neutral (BinOp OpAnd     x (BoolLit True) ) = x
+  neutral (BinOp OpOr      x (BoolLit False)) = x
+  neutral other = other
+
+  -- rules specific to logical implication
+  imprules (BinOp OpImplies (BoolLit False) _) = BoolLit True -- ex falso quodlibet
+  imprules (BinOp OpImplies (BoolLit True) x)  = x
+  imprules (BinOp OpImplies _ (BoolLit True))  = BoolLit True
+  imprules other = other
+
+  -- constant propagation rules
+  constprop (NegExp (BoolLit b)) = BoolLit (not b)
+  constprop (BinOp OpAnd (BoolLit a) (BoolLit b)) = BoolLit (a && b)
+  constprop (BinOp OpOr (BoolLit a) (BoolLit b)) = BoolLit (a || b)
+  constprop (BinOp OpImplies (BoolLit a) (BoolLit b)) = BoolLit (not a || b)
+  constprop other = other
+
+  -- elimination rules for boolean expression
+  boolElim (BinOp OpAnd (BoolLit False) x) = (BoolLit False)
+  boolElim (BinOp OpOr  (BoolLit True)  x) = (BoolLit True)
+  boolElim (BinOp OpAnd x (BoolLit False)) = (BoolLit False)
+  boolElim (BinOp OpOr  x (BoolLit True) ) = (BoolLit True)
+  boolElim other = other
+
+  -- rules exploiting reflexivity/non-reflexivity
+  reflexiveRel (BinOp op x y)
+    | op `elem` [OpLEQ, OpEQ, OpGEQ] && x == y = BoolLit True
+    | op `elem` [OpLT, OpGT] && x == y = BoolLit False
+  reflexiveRel other = other
+
+  -- when we are immediately accessing the syntactically equivalent index,
+  -- we may return the value. If they are not syntactically equal, they might
+  -- still be semantically equal so we don't do anything.
+  arrayAccess (Index (RepBy a i e) i2)
+    | i == i2 = e
+  arrayAccess other = other
 
 -- * Pretty Printing
 
@@ -225,7 +243,7 @@ instance PP.Pretty Expression where
       Index arr idx -> PP.pretty arr <> PP.brackets (go idx 0)
       RepBy arr idx e -> PP.pretty arr <> PP.parens (go idx 0 PP.<+> ppkeyword "repby" PP.<+> go e 0)
       NegExp e -> withParens (9 < reqPrec) ("!" <> go e 9)
-      ForAll decl e -> withParens (0 < reqPrec) $ ppkeyword  "forall" PP.<+> PP.pretty decl <> PP.colon PP.</> go e 0
+      ForAll decl e -> withParens (0 < reqPrec) $ ppkeyword "forall" PP.<+> PP.pretty decl <> PP.colon PP.</> go e 0
 
 instance PP.Pretty Statement where
   pretty Skip = ppkeyword "skip"
@@ -255,12 +273,12 @@ instance PP.Pretty Statement where
       PP.indent 2 (PP.pretty body) PP.<$$> PP.rbrace
 
   pretty (Var decls blk@(Block _)) =
-      ppkeyword "var" PP.<+> PP.align (PP.cat (PP.punctuate PP.comma (map PP.pretty decls)))
+      ppkeyword "var" PP.<+> PP.align (PP.sep (PP.punctuate PP.comma (map PP.pretty decls)))
             PP.<+> ppkeyword "in"
             PP.<$$> PP.indent 2 (PP.pretty blk)
             PP.<$$> ppkeyword "end"
   pretty (Var decls single) =
-      PP.hang 2 (ppkeyword "var" PP.<+> PP.align (PP.cat (PP.punctuate PP.comma (map PP.pretty decls)))
+      PP.hang 2 (ppkeyword "var" PP.<+> PP.align (PP.sep (PP.punctuate PP.comma (map PP.pretty decls)))
             PP.<+> ppkeyword "in"
             PP.</> PP.pretty single)
       PP.</> ppkeyword "end"
