@@ -93,8 +93,8 @@ instance Num Expression where
 
 -- * Simplification
 
-containsVar :: AST.QVar -> Predicate -> Bool
-containsVar v p = AST.Ref v `elem` universe p
+containsVar :: QVar -> Expression -> Bool
+containsVar v p = Ref v `elem` universe p
 
 simplifyExpr :: Expression -> Expression
 simplifyExpr = transform rules where
