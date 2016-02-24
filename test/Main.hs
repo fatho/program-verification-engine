@@ -3,7 +3,7 @@ module Main where
 
 import qualified GCL.AST                      as GCL
 import qualified GCL.DSL                      as GCL
-import qualified WLP.Prover                   as Prover
+import qualified WLP.Prover.Interface         as Prover
 import qualified WLP.Wlp                      as WLP
 
 import           Control.Monad
@@ -33,13 +33,14 @@ interactiveProver = Prover.Backend
             ask q e
 
 main :: IO ()
-main = forM_ allPrograms $ \case
-  Left err -> putStrLn err
-  Right prog@(GCL.Program _ _ _ s) -> do
-    prettyPrint 100 prog
-    putStrLn ""
-    putStrLn ""
-    precond <- WLP.wlp interactiveProver s (GCL.BoolLit True)
-    prettyPrint 100 $ precond
-    putStrLn ""
-    putStrLn ""
+main = do
+  forM_ allPrograms $ \case
+   Left err -> putStrLn err
+   Right prog@(GCL.Program _ _ _ s) -> do
+     prettyPrint 100 prog
+     putStrLn ""
+     putStrLn ""
+     precond <- WLP.wlp interactiveProver s (GCL.BoolLit True)
+     prettyPrint 100 $ precond
+     putStrLn ""
+     putStrLn ""

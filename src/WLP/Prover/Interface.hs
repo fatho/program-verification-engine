@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
-module WLP.Prover where
+module WLP.Prover.Interface where
 
 import qualified GCL.AST as AST
 

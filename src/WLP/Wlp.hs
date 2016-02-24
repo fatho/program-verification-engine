@@ -12,7 +12,7 @@ import           Data.Maybe
 
 import qualified GCL.AST              as AST
 import           GCL.DSL
-import qualified WLP.Prover           as Prover
+import qualified WLP.Prover.Interface           as Prover
 
 import           Control.Lens.Plated
 
