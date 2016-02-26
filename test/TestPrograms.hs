@@ -7,7 +7,14 @@ import           GCL.DSL
 
 -- * Examples
 
-allPrograms = [ simple, swap, minind ]
+allPrograms = [ d1, simple, swap, minind ]
+
+d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
+  assume $ 0 < "x"
+  while (0 <= "x") (0 < "x") $ do
+    "x" $= "x" - 1
+    "y" $= "x"
+  assert $ "y" == 0
 
 swap = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` array int] $ do
   var ["tmp" `as` int, "a_old" `as` array int] $ do
@@ -32,7 +39,7 @@ minind = program "minind" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" 
    assert $ forall ("j" `as` int) $ "i0" <= "j" && "j" < "N" ==> "a" ! "r" <= "a" ! "j"
 
 simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
-  assume true
+  assume $ "j" == 0
   "r" $= "i" + "j"
   -- ["r", "i"] $$= ["i", "r"]
-  assert $ "r" == "i" && forall ("r" `as` int) ("r" == "r")
+  assert $ "r" == "i"

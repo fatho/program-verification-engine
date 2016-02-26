@@ -4,6 +4,7 @@ module Main where
 import qualified GCL.AST                      as GCL
 import qualified GCL.DSL                      as GCL
 import qualified WLP.Prover.Interface         as Prover
+import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
 
 import           Control.Monad
@@ -40,7 +41,9 @@ main = do
      prettyPrint 100 prog
      putStrLn ""
      putStrLn ""
-     precond <- WLP.wlp interactiveProver s (GCL.BoolLit True)
+     let precond = WLP.wlpProgram prog
      prettyPrint 100 $ precond
+     putStrLn ""
+     Prover.valid SBV.z3 precond >>= print
      putStrLn ""
      putStrLn ""

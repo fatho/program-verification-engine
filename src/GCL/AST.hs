@@ -226,7 +226,7 @@ instance PP.Pretty UVar where
   pretty (UVar name) = ppident $ PP.text name
 
 instance PP.Pretty QVar where
-  pretty (QVar names id ty) = PP.hcat (PP.punctuate PP.dot (prefix ++ [real])) <> "$" <> PP.pretty id where
+  pretty (QVar names id ty) = PP.hcat (PP.punctuate "_" (prefix ++ [real])) <> "_" <> PP.pretty id where
     prefix = map PP.pretty $ init names
     real   = ppident $ PP.pretty $ last names
 
