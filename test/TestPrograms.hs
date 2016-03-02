@@ -13,14 +13,14 @@ d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 0 < "x"
   while (0 <= "x") (0 < "x") $ do
     "x" $= "x" - 1
-    "y" $= "x"
+  "y" $= "x"
   assert $ "y" == 0
 
 d2 = program "D2" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 2 <= "x"
   while (0 <= "x") (0 < "x") $ do
     "x" $= "x" - 2
-    "y" $= "x"
+  "y" $= "x"
   assert $ "y" == 0
 
 swap = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` array int] $ do

@@ -41,7 +41,10 @@ main = do
      prettyPrint 100 prog
      putStrLn ""
      putStrLn ""
+     precond <- WLP.wlpProgramMonadic SBV.z3 prog
+     {-
      let precond = WLP.wlpProgram prog
+     -}
      prettyPrint 100 $ precond
      putStrLn ""
      Prover.valid SBV.z3 precond >>= print

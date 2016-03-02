@@ -25,7 +25,11 @@ import           Debug.Trace
 type Name = String
 
 -- | Available types in our verification engine.
-data Type = BoolType | IntType | ArrayType Type
+data PrimitiveType = BoolType | IntType
+  deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+-- | Available types in our verification engine.
+data Type = BasicType PrimitiveType | ArrayType PrimitiveType
   deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 -- | An unqualified reference to a variable, meaning depends on scope.
@@ -211,9 +215,12 @@ instance PP.Pretty Operator where
   pretty OpAnd = "&&"
   pretty OpOr = "||"
 
-instance PP.Pretty Type where
+instance PP.Pretty PrimitiveType where
   pretty IntType = pptype "int"
   pretty BoolType = pptype "bool"
+
+instance PP.Pretty Type where
+  pretty (BasicType prim) = PP.pretty prim
   pretty (ArrayType ty) = pptype $ "[]" PP.<+> PP.pretty ty
 {-
 instance PP.Pretty (Var q) where

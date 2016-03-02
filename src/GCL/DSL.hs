@@ -128,13 +128,14 @@ declare udecls body = do
 -- * Type DSL
 
 int :: AST.Type
-int = AST.IntType
+int = AST.BasicType AST.IntType
 
 boolean :: AST.Type
-boolean = AST.BoolType
+boolean = AST.BasicType AST.BoolType
 
 array :: AST.Type -> AST.Type
-array = AST.ArrayType
+array (AST.BasicType ty) = AST.ArrayType ty
+array _ = error "array must consist of values of a primitive type"
 
 -- * Declaration DSL
 

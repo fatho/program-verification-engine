@@ -28,8 +28,9 @@ symOperator GCL.OpImplies = \a b -> svOr (svNot a) b
 symOperator GCL.OpAnd = svAnd
 symOperator GCL.OpOr = svOr
 
-kindOfType :: GCL.Type -> Kind
+kindOfType :: GCL.PrimitiveType -> Kind
 kindOfType GCL.IntType = KUnbounded
+kindOfType GCL.BoolType = KBool
 
 buildTheorem :: GCL.Expression -> Symbolic SVal
 buildTheorem ex = go Map.empty ex where
@@ -44,10 +45,14 @@ buildTheorem ex = go Map.empty ex where
     GCL.RepBy arr idx new -> undefined
     GCL.NegExp ex -> svNot <$> go env ex
     GCL.ForAll (GCL.Decl var ty) ex -> do
-      let kind = kindOfType ty
-          name = qvarString var
-      svar <- svMkSymVar (Just ALL) kind (Just name)
-      go (Map.insert var svar env) ex
+      case ty of
+        GCL.BasicType ty -> do
+          let kind = kindOfType ty
+              name = qvarString var
+          svar <- svMkSymVar (Just ALL) kind (Just name)
+          go (Map.insert var svar env) ex
+        GCL.ArrayType ty -> do
+          return undefined
 
 --buildTheorem = undefined
 
@@ -57,12 +62,12 @@ sbv satCfg = Backend
       let thm = buildTheorem ex
       result <- proveWith satCfg thm
       print result
-      return False
+      return $ not $ Z3.modelExists result
   , satisfiable = \ex -> do
       let thm = buildTheorem ex
       result <- satWith satCfg thm
       print result
-      return False
+      return $ Z3.modelExists result
   }
 
 z3 = sbv Z3.sbvCurrentSolver
