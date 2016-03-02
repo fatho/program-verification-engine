@@ -32,42 +32,60 @@ kindOfType :: GCL.PrimitiveType -> Kind
 kindOfType GCL.IntType = KUnbounded
 kindOfType GCL.BoolType = KBool
 
-buildTheorem :: GCL.Expression -> Symbolic SVal
+data Sym = Val SVal | Arr SArr
+
+buildTheorem :: GCL.Expression -> Symbolic Sym
 buildTheorem ex = go Map.empty ex where
   go env ex = case ex of
-    GCL.IntLit i -> return $ svInteger KUnbounded (toInteger i)
-    GCL.BoolLit b -> return $ svBool b
+    GCL.IntLit i -> return $ Val $ svInteger KUnbounded (toInteger i)
+    GCL.BoolLit b -> return $ Val $ svBool b
     GCL.Ref var -> case Map.lookup var env of
       Nothing -> fail $ "variable " ++ show var ++ " not declared"
-      Just sv -> return sv
-    GCL.BinOp op l r -> symOperator op <$> go env l <*> go env r
-    GCL.Index arr idx -> undefined
-    GCL.RepBy arr idx new -> undefined
-    GCL.NegExp ex -> svNot <$> go env ex
+      Just sym -> return sym
+    GCL.BinOp op l r -> do
+      Val lval <- go env l
+      Val rval <- go env r
+      return $ Val $ symOperator op lval rval
+    GCL.Index arr idx -> do
+      Arr sArr <- go env arr
+      Val sIdx <- go env idx
+      return $ Val $ readSArr sArr sIdx
+    GCL.RepBy arr idx new -> do
+      Arr sArr <- go env arr
+      Val sIdx <- go env idx
+      Val sNew <- go env new
+      return $ Arr $ writeSArr sArr sIdx sNew
+    GCL.NegExp ex -> do
+      Val nVal <- go env ex
+      return $ Val $ svNot nVal
     GCL.ForAll (GCL.Decl var ty) ex -> do
       case ty of
         GCL.BasicType ty -> do
           let kind = kindOfType ty
               name = qvarString var
           svar <- svMkSymVar (Just ALL) kind (Just name)
-          go (Map.insert var svar env) ex
+          go (Map.insert var (Val svar) env) ex
         GCL.ArrayType ty -> do
-          return undefined
-
---buildTheorem = undefined
+          let kind = kindOfType ty
+          sarr <- newSArr (KUnbounded, kind) (const $ qvarString var) Nothing
+          go (Map.insert var (Arr sarr) env) ex
 
 sbv :: SMTConfig -> Backend IO
 sbv satCfg = Backend
   { valid = \ex -> do
-      let thm = buildTheorem ex
+      let thm = getVal $ buildTheorem ex
       result <- proveWith satCfg thm
       print result
       return $ not $ Z3.modelExists result
   , satisfiable = \ex -> do
-      let thm = buildTheorem ex
+      let thm = getVal $ buildTheorem ex
       result <- satWith satCfg thm
       print result
       return $ Z3.modelExists result
-  }
+  } where
+    getVal :: Symbolic Sym -> Symbolic SVal
+    getVal symV = do
+      Val v <- symV
+      return v
 
 z3 = sbv Z3.sbvCurrentSolver

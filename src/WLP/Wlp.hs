@@ -46,6 +46,7 @@ wlp s q = AST.simplifyExpr $ go s q where
         preserved   = preserveInv /\ postcnd
     in (preserved ==> iv) /\ (neg preserved ==> (neg cnd /\ q))
 
+-- | Entry point for WLP. Qualifies program input and ouput variables
 wlpProgram :: AST.Program -> Predicate
 wlpProgram (AST.Program _ i o body) =
   wlp (AST.Var (i ++ o) body) true
@@ -101,6 +102,7 @@ wlpMonadic backend s q = AST.simplifyExpr <$> go s q where
         liftIO $ putStrLn "Requiring that loop is never executed"
         return (neg cnd /\ q)
 
+-- | Entry point for WLP. Qualifies program input and ouput variables
 wlpProgramMonadic :: MonadIO m => Prover.Backend m -> AST.Program -> m Predicate
 wlpProgramMonadic backend (AST.Program _ i o body) =
   wlpMonadic backend (AST.Var (i ++ o) body) true

@@ -7,7 +7,7 @@ import           GCL.DSL
 
 -- * Examples
 
-allPrograms = [ d1, d2, simple, swap, minind ]
+allPrograms = [ d1, d2, swap, minind, simple ]
 
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 0 < "x"
