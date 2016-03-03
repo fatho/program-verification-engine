@@ -3,12 +3,15 @@ module TestPrograms where
 
 import           Prelude hiding ((&&), (/=), (<), (<=), (==), (>), (>=), (||))
 
+import           GCL.AST (Program)
 import           GCL.DSL
 
 -- * Examples
 
+allPrograms :: [Either GclError Program]
 allPrograms = [ d1, d2, swap, minind, simple ]
 
+d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 0 < "x"
   while (0 <= "x") (0 < "x") $ do
@@ -16,6 +19,7 @@ d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
   "y" $= "x"
   assert $ "y" == 0
 
+d2 :: Either GclError Program
 d2 = program "D2" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 2 <= "x"
   while (0 <= "x") (0 < "x") $ do
@@ -23,6 +27,7 @@ d2 = program "D2" ["x" `as` int ] ["y" `as` int] $ do
   "y" $= "x"
   assert $ "y" == 0
 
+swap :: Either GclError Program
 swap = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` array int] $ do
   var ["tmp" `as` int, "a_old" `as` array int] $ do
     "a_old" $= "a"
@@ -32,6 +37,7 @@ swap = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as
     "a'"      $= "a"
     assert $ "a'" ! "i" == "a_old" ! "j" && "a'" ! "j" == "a_old" ! "i"
 
+minind :: Either GclError Program
 minind = program "minind" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" `as` int] $ do
   var ["i0" `as` int] $ do
    "i0" $= "i"
@@ -45,8 +51,8 @@ minind = program "minind" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" 
        "i" $= "i" + 1
    assert $ forall ("j" `as` int) $ "i0" <= "j" && "j" < "N" ==> "a" ! "r" <= "a" ! "j"
 
+simple :: Either GclError Program
 simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
   assume $ "j" == 0
   "r" $= "i" + "j"
-  -- ["r", "i"] $$= ["i", "r"]
   assert $ "r" == "i"

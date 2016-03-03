@@ -19,7 +19,6 @@ import           Prelude              hiding ((&&), (/=), (<), (<=), (==), (>),
 
 import qualified GCL.AST              as AST
 
-import           Control.Applicative
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Except
@@ -106,9 +105,9 @@ unique = nextUnique <<+= 1
 -- | Creates a new qualified name.
 mkQualifiedVar :: AST.UVar -> AST.Type -> Code AST.QVar
 mkQualifiedVar (AST.UVar name) ty = do
-  id <- unique
+  uid <- unique
   pr <- view qualifiedPrefix
-  return $ AST.QVar (pr ++ [name]) id ty
+  return $ AST.QVar (pr ++ [name]) uid ty
 
 -- | Increases the nesting level for qualified names.
 nested :: [AST.Name] -> Code a -> Code a
@@ -166,6 +165,8 @@ class ExprAST ast where
   neg :: ast -> ast
   -- | Creates a forall quantifier.
   forall :: AST.Decl (ExpVar ast) -> ast -> ast
+  -- | If-then-else expression (ternary operator).
+  ite :: ast -> ast -> ast -> ast
 
 -- | A boolean true literal.
 true :: ExprAST ast => ast
@@ -186,6 +187,7 @@ instance ExprAST AST.Expression where
   repBy = AST.RepBy
   neg = AST.NegExp
   forall = AST.ForAll
+  ite = AST.IfThenElse
 
 instance ExprAST (Code AST.Expression) where
   type ExpVar (Code AST.Expression) = AST.UVar
@@ -198,6 +200,7 @@ instance ExprAST (Code AST.Expression) where
   repBy arr idx expr = liftM3 AST.RepBy arr idx expr
   neg = liftM AST.NegExp
   forall udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.ForAll qdecl) quantExp
+  ite = liftM3 AST.IfThenElse
 
 exists :: ExprAST ast => AST.Decl (ExpVar ast) -> ast -> ast
 exists udecl quantExp = neg $ forall udecl (neg quantExp)
@@ -268,6 +271,8 @@ instance Num (Code AST.Expression) where
   (+) = operator AST.OpPlus
   (-) = operator AST.OpMinus
   (*) = operator AST.OpTimes
+  abs e = liftM abs e
+  signum e = liftM signum e
   fromInteger = litI . fromInteger
 
 -- * Statement DSL
@@ -288,9 +293,9 @@ ndet left right = do
   emit $ AST.NDet leftAst rightAst
 
 while :: Code AST.Expression -> Code AST.Expression -> Code () -> Code ()
-while invariant guard body = do
+while invariant loopGuard body = do
   inv <- invariant
-  cnd <- guard
+  cnd <- loopGuard
   bodyStmt <- extractStmt body
   emit $ AST.While inv cnd bodyStmt
 
@@ -301,12 +306,12 @@ infix 0 $$=
   transformAll (vm:vs) (em:es) = do
       v <- vm
       e <- em
-      (:) <$> transform v e <*> transformAll vs es
+      (:) <$> transformArrAssign v e <*> transformAll vs es
   transformAll _ _             = throwError "non-matching number of values in multi-assignment"
 
-  transform (AST.Ref v)     expr = return (v, expr)
-  transform (AST.Index a i) expr = transform a (AST.RepBy a i expr)
-  transform _               _    = throwError "expression is not an lvalue"
+  transformArrAssign (AST.Ref v)     expr = return (v, expr)
+  transformArrAssign (AST.Index a i) expr = transformArrAssign a (AST.RepBy a i expr)
+  transformArrAssign _               _    = throwError "expression is not an lvalue"
 
 infix 0 $=
 ($=) :: Code AST.Expression -> Code AST.Expression -> Code ()

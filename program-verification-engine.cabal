@@ -18,11 +18,12 @@ cabal-version:       >=1.10
 library
   exposed-modules:     GCL.AST
                      , GCL.DSL
-                     , WLP.Prover.Interface
+                     , WLP.Interface
                      , WLP.Prover.SBV
                      , WLP.Wlp
   -- other-modules:
   -- other-extensions:
+  ghc-options:         -Wall
   build-depends:       base >=4.8 && <4.9
                      , ansi-wl-pprint
                      , containers
@@ -30,13 +31,18 @@ library
                      , mtl
                      , transformers
                      , sbv
+                     , free
   hs-source-dirs:      src
   default-language:    Haskell2010
 
 executable pv-test
   main-is:             Main.hs
   other-modules:       TestPrograms
+  ghc-options:         -Wall
   build-depends:       base >=4.8 && <4.9
                      , ansi-wl-pprint
                      , program-verification-engine
+                     , free
+                     , sbv
+                     , transformers
   hs-source-dirs:      test

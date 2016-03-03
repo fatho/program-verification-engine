@@ -1,19 +1,21 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE RecordWildCards #-}
 module WLP.Prover.SBV where
 
-import           WLP.Prover.Interface
-
-import           Data.List            (intercalate)
-import           Data.Map.Strict      (Map)
-import qualified Data.Map.Strict      as Map
-import qualified Data.SBV.Bridge.Z3   as Z3
+import           Control.Monad
+import           Control.Monad.Free
+import           Control.Monad.IO.Class
+import           Data.List              (intercalate)
+import qualified Data.Map.Strict        as Map
+import qualified Data.SBV.Bridge.Z3     as Z3
 import           Data.SBV.Dynamic
-import qualified GCL.AST              as GCL
 
-import           Debug.Trace
+import qualified GCL.AST                as GCL
+import           WLP.Interface
 
 qvarString :: GCL.QVar -> String
-qvarString (GCL.QVar names id _) = intercalate "_" names ++ "_" ++ show id
+qvarString (GCL.QVar names uid _) = intercalate "_" names ++ "_" ++ show uid
 
 symOperator :: GCL.Operator -> SVal -> SVal -> SVal
 symOperator GCL.OpLEQ = svLessEq
@@ -34,9 +36,14 @@ kindOfType GCL.BoolType = KBool
 
 data Sym = Val SVal | Arr SArr
 
+requireVal :: Monad m => m Sym -> m SVal
+requireVal symV = do
+  Val v <- symV
+  return v
+
 buildTheorem :: GCL.Expression -> Symbolic Sym
-buildTheorem ex = go Map.empty ex where
-  go env ex = case ex of
+buildTheorem = go Map.empty where
+  go env expr = case expr of
     GCL.IntLit i -> return $ Val $ svInteger KUnbounded (toInteger i)
     GCL.BoolLit b -> return $ Val $ svBool b
     GCL.Ref var -> case Map.lookup var env of
@@ -58,8 +65,8 @@ buildTheorem ex = go Map.empty ex where
     GCL.NegExp ex -> do
       Val nVal <- go env ex
       return $ Val $ svNot nVal
-    GCL.ForAll (GCL.Decl var ty) ex -> do
-      case ty of
+    GCL.ForAll (GCL.Decl var varTy) ex -> do
+      case varTy of
         GCL.BasicType ty -> do
           let kind = kindOfType ty
               name = qvarString var
@@ -69,23 +76,25 @@ buildTheorem ex = go Map.empty ex where
           let kind = kindOfType ty
           sarr <- newSArr (KUnbounded, kind) (const $ qvarString var) Nothing
           go (Map.insert var (Arr sarr) env) ex
+    GCL.IfThenElse cond tval fval -> do
+      Val c <- go env cond
+      Val t <- go env tval
+      Val f <- go env fval
+      return $ Val $ svIte c t f
 
-sbv :: SMTConfig -> Backend IO
-sbv satCfg = Backend
-  { valid = \ex -> do
-      let thm = getVal $ buildTheorem ex
-      result <- proveWith satCfg thm
-      print result
-      return $ not $ Z3.modelExists result
-  , satisfiable = \ex -> do
-      let thm = getVal $ buildTheorem ex
-      result <- satWith satCfg thm
-      print result
-      return $ Z3.modelExists result
-  } where
-    getVal :: Symbolic Sym -> Symbolic SVal
-    getVal symV = do
-      Val v <- symV
-      return v
 
-z3 = sbv Z3.sbvCurrentSolver
+interpretSBV :: MonadIO m => SMTConfig -> OutputMode -> (Predicate -> m ()) -> WLP a -> m a
+interpretSBV smt outputMode tracePredicate = iterM run where
+  run (Prove predi cont) = do
+    let thm = requireVal $ buildTheorem predi
+    runIfTrace (tracePredicate predi)
+    result <- liftIO $ proveWith smt thm
+    runIfTrace (liftIO $ print result)
+    cont (not $ Z3.modelExists result)
+
+  run (Trace msg cont) = do
+    runIfTrace $ liftIO $ putStrLn msg
+    cont
+
+  runIfTrace :: Monad m => m () -> m ()
+  runIfTrace = when (outputMode == TraceMode)

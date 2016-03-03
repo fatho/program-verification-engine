@@ -15,11 +15,7 @@ import           Control.Lens.Plated
 import           Data.Data
 import           Data.Data.Lens
 import           Data.Monoid
-import           Data.String
-import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
-
-import           Debug.Trace
 
 -- | The type of names.
 type Name = String
@@ -80,6 +76,7 @@ data Expression = IntLit Int
                 | RepBy Expression Expression Expression
                 | NegExp Expression
                 | ForAll (Decl QVar) Expression
+                | IfThenElse Expression Expression Expression
   deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Plated Expression where
@@ -93,63 +90,12 @@ instance Num Expression where
   (+) = BinOp OpPlus
   (-) = BinOp OpMinus
   (*) = BinOp OpTimes
+  abs e = IfThenElse (BinOp OpLT e 0) (negate e) e
+  signum e = IfThenElse (BinOp OpLT e 0) (-1) (IfThenElse (BinOp OpEQ e 0) 0 1)
   fromInteger = IntLit . fromInteger
-
--- * Simplification
 
 containsVar :: QVar -> Expression -> Bool
 containsVar v p = Ref v `elem` universe p
-
-simplifyExpr :: Expression -> Expression
-simplifyExpr = transform rules where
-  rules = foldr1 (.) [neutral, imprules, constprop, boolElim, reflexiveRel, arrayAccess]
-
-  -- exploiting neutral elements of those operations
-  neutral (BinOp OpPlus    (IntLit 0)      x) = x
-  neutral (BinOp OpMinus   (IntLit 0)      x) = x
-  neutral (BinOp OpTimes   (IntLit 1)      x) = x
-  neutral (BinOp OpAnd     (BoolLit True)  x) = x
-  neutral (BinOp OpOr      (BoolLit False) x) = x
-  -- symmetric rules to the above
-  neutral (BinOp OpPlus    x (IntLit 0)     ) = x
-  neutral (BinOp OpMinus   x (IntLit 0)     ) = x
-  neutral (BinOp OpTimes   x (IntLit 1)     ) = x
-  neutral (BinOp OpAnd     x (BoolLit True) ) = x
-  neutral (BinOp OpOr      x (BoolLit False)) = x
-  neutral other = other
-
-  -- rules specific to logical implication
-  imprules (BinOp OpImplies (BoolLit False) _) = BoolLit True -- ex falso quodlibet
-  imprules (BinOp OpImplies (BoolLit True) x)  = x
-  imprules (BinOp OpImplies _ (BoolLit True))  = BoolLit True
-  imprules other = other
-
-  -- constant propagation rules
-  constprop (NegExp (BoolLit b)) = BoolLit (not b)
-  constprop (BinOp OpAnd (BoolLit a) (BoolLit b)) = BoolLit (a && b)
-  constprop (BinOp OpOr (BoolLit a) (BoolLit b)) = BoolLit (a || b)
-  constprop (BinOp OpImplies (BoolLit a) (BoolLit b)) = BoolLit (not a || b)
-  constprop other = other
-
-  -- elimination rules for boolean expression
-  boolElim (BinOp OpAnd (BoolLit False) x) = (BoolLit False)
-  boolElim (BinOp OpOr  (BoolLit True)  x) = (BoolLit True)
-  boolElim (BinOp OpAnd x (BoolLit False)) = (BoolLit False)
-  boolElim (BinOp OpOr  x (BoolLit True) ) = (BoolLit True)
-  boolElim other = other
-
-  -- rules exploiting reflexivity/non-reflexivity
-  reflexiveRel (BinOp op x y)
-    | op `elem` [OpLEQ, OpEQ, OpGEQ] && x == y = BoolLit True
-    | op `elem` [OpLT, OpGT] && x == y = BoolLit False
-  reflexiveRel other = other
-
-  -- when we are immediately accessing the syntactically equivalent index,
-  -- we may return the value. If they are not syntactically equal, they might
-  -- still be semantically equal so we don't do anything.
-  arrayAccess (Index (RepBy a i e) i2)
-    | i == i2 = e
-  arrayAccess other = other
 
 -- * Pretty Printing
 
@@ -233,7 +179,7 @@ instance PP.Pretty UVar where
   pretty (UVar name) = ppident $ PP.text name
 
 instance PP.Pretty QVar where
-  pretty (QVar names id ty) = PP.hcat (PP.punctuate "_" (prefix ++ [real])) <> "_" <> PP.pretty id where
+  pretty (QVar names uid _) = PP.hcat (PP.punctuate "_" (prefix ++ [real])) <> "_" <> PP.pretty uid where
     prefix = map PP.pretty $ init names
     real   = ppident $ PP.pretty $ last names
 
@@ -241,7 +187,7 @@ instance PP.Pretty var => PP.Pretty (Decl var) where
   pretty (Decl var ty) = PP.hsep [PP.pretty var, PP.colon, PP.pretty ty]
 
 instance PP.Pretty Expression where
-  pretty e = go e 0 where
+  pretty = flip go 0 where
     go expr reqPrec = case expr of
       IntLit i -> PP.pretty i
       BoolLit b -> ppkeyword $ if b then "true" else "false"
@@ -251,6 +197,7 @@ instance PP.Pretty Expression where
       RepBy arr idx e -> PP.pretty arr <> PP.parens (go idx 0 PP.<+> ppkeyword "repby" PP.<+> go e 0)
       NegExp e -> withParens (9 < reqPrec) ("!" <> go e 9)
       ForAll decl e -> withParens (0 < reqPrec) $ ppkeyword "forall" PP.<+> PP.pretty decl <> PP.colon PP.</> go e 0
+      IfThenElse cond tval fval -> withParens (0 < reqPrec) (go cond 0 PP.<+> "->" PP.<+> go tval 0 PP.<+> "|" PP.<+> go fval 0)
 
 instance PP.Pretty Statement where
   pretty Skip = ppkeyword "skip"
