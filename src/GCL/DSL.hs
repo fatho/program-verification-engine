@@ -292,12 +292,18 @@ ndet left right = do
   rightAst <- extractStmt right
   emit $ AST.NDet leftAst rightAst
 
-while :: Code AST.Expression -> Code AST.Expression -> Code () -> Code ()
-while invariant loopGuard body = do
-  inv <- invariant
+while :: Code AST.Expression -> Code () -> Code ()
+while loopGuard body = do
   cnd <- loopGuard
   bodyStmt <- extractStmt body
-  emit $ AST.While inv cnd bodyStmt
+  emit $ AST.InvWhile Nothing cnd bodyStmt
+
+invWhile :: Maybe (Code AST.Expression) -> Code AST.Expression -> Code () -> Code ()
+invWhile invariant loopGuard body = do
+  inv <- sequence invariant
+  cnd <- loopGuard
+  bodyStmt <- extractStmt body
+  emit $ AST.InvWhile inv cnd bodyStmt
 
 infix 0 $$=
 ($$=) :: [Code AST.Expression] -> [Code AST.Expression] -> Code ()

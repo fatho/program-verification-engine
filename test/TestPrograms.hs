@@ -14,7 +14,7 @@ allPrograms = [ d1, d2, swap, minind, simple ]
 d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 0 < "x"
-  while (0 <= "x") (0 < "x") $ do
+  invWhile (Just $ 0 <= "x") (0 < "x") $ do
     "x" $= "x" - 1
   "y" $= "x"
   assert $ "y" == 0
@@ -22,7 +22,7 @@ d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
 d2 :: Either GclError Program
 d2 = program "D2" ["x" `as` int ] ["y" `as` int] $ do
   assume $ 2 <= "x"
-  while (0 <= "x") (0 < "x") $ do
+  invWhile (Just $ 0 <= "x") (0 < "x") $ do
     "x" $= "x" - 2
   "y" $= "x"
   assert $ "y" == 0
@@ -44,7 +44,7 @@ minind = program "minind" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" 
    var ["min" `as` int] $ do
      ["min", "r"] $$= ["a" ! "i", "i"]
      let iv = "i" <= "N" && forall ("j" `as` int) ("i0" <= "j" && "j" < "i" ==> "a" ! "r" <= "a" ! "j")
-     while iv ("i" < "N") $ do
+     invWhile (Just iv) ("i" < "N") $ do
        if_ ("a" ! "i" < "min")
          (["min", "r"] $$= ["a" ! "i", "i"])
          skip

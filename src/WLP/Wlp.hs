@@ -53,7 +53,8 @@ wlp stmt postcond = go stmt postcond where
       if AST.containsVar v inner
         then return (forall d r)
         else return r) inner decls
-  go (AST.While iv cnd s) q = do
+  -- invariant provided, check it
+  go (AST.InvWhile (Just iv) cnd s) q = do
     preInv <- go s iv
     let preserveInv = iv /\ cnd ==> preInv
         postcnd     = iv /\ neg cnd ==> q
@@ -72,6 +73,10 @@ wlp stmt postcond = go stmt postcond where
       False -> do
         trace "Requiring that loop is never executed"
         return (neg cnd /\ q)
+  -- invariant not provided
+  go (AST.InvWhile Nothing cnd s) q = do
+    trace "cannot infer invariant yet, requiring that loop is never executed"
+    return (neg cnd /\ q)
 
 
 data WlpResult

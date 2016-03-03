@@ -59,13 +59,21 @@ data Decl var = Decl var Type
   deriving (Eq, Ord, Show, Data, Typeable)
 
 data Statement = Skip
+               -- ^ the skip statement does nothing
                | Assert Expression
+               -- ^ asserts that the given (boolean) expression holds, i.e. it adds another clause that needs to be proven
                | Assume Expression
+               -- ^ assumes that the given (boolean) expression holds, i.e. it provides a known fact to the prover
                | Assign [(QVar, Expression)]
+               -- ^ simultaneously assigns multiple variables to expressions
                | Block [Statement]
+               -- ^ a sequential block of statements
                | NDet Statement Statement
-               | While Expression Expression Statement
+               -- ^ a non-deterministic branch between to statements
+               | InvWhile (Maybe Expression) Expression Statement
+               -- ^ a while loop optionally annotated with an invariant
                | Var [Decl QVar] Statement
+               -- ^ a declaration of variables
   deriving (Eq, Ord, Show, Data, Typeable)
 
 data Expression = IntLit Int
@@ -221,7 +229,7 @@ instance PP.Pretty Statement where
   pretty (NDet s1 s2) = PP.lbrace PP.<+> PP.align (PP.pretty s1) PP.</> PP.rbrace
       PP.<+> "[]" PP.<+> PP.lbrace PP.<+> PP.align (PP.pretty s2) PP.</> PP.rbrace
 
-  pretty (While inv cond body) =
+  pretty (InvWhile inv cond body) =
       ppkeyword "inv" PP.<+> PP.pretty inv PP.</>
       ppkeyword "while" PP.<+> PP.align (PP.pretty cond PP.</> ppkeyword "do") PP.<+> PP.lbrace PP.<$$>
       PP.indent 2 (PP.pretty body) PP.<$$> PP.rbrace
