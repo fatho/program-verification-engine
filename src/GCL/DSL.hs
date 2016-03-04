@@ -14,9 +14,6 @@ program in the Guarded Common Language represented by "GCL.AST".
 -}
 module GCL.DSL where
 
-import           Prelude              hiding ((&&), (/=), (<), (<=), (==), (>),
-                                       (>=), (||))
-
 import qualified GCL.AST              as AST
 
 import           Control.Lens
@@ -226,41 +223,33 @@ infixr 2 ∨
 (∨) :: ExprAST ast => ast -> ast -> ast
 (∨) = (\/)
 
-infixr 3 &&
-(&&) :: ExprAST ast => ast -> ast -> ast
-(&&) = (/\)
-
-infixr 2 ||
-(||) :: ExprAST ast => ast -> ast -> ast
-(||) = (\/)
-
 infixr 1 ==>
 (==>) :: ExprAST ast => ast -> ast -> ast
 (==>) = operator AST.OpImplies
 
-infix 4 <=
-(<=) :: ExprAST ast => ast -> ast -> ast
-(<=) = operator AST.OpLEQ
+infix 4 .<=
+(.<=) :: ExprAST ast => ast -> ast -> ast
+(.<=) = operator AST.OpLEQ
 
-infix 4 >=
-(>=) :: ExprAST ast => ast -> ast -> ast
-(>=) = operator AST.OpGEQ
+infix 4 .>=
+(.>=) :: ExprAST ast => ast -> ast -> ast
+(.>=) = operator AST.OpGEQ
 
-infix 4 >
-(>) :: ExprAST ast => ast -> ast -> ast
-(>) = operator AST.OpGT
+infix 4 .>
+(.>) :: ExprAST ast => ast -> ast -> ast
+(.>) = operator AST.OpGT
 
-infix 4 <
-(<) :: ExprAST ast => ast -> ast -> ast
-(<) = operator AST.OpLT
+infix 4 .<
+(.<) :: ExprAST ast => ast -> ast -> ast
+(.<) = operator AST.OpLT
 
-infix 4 ==
-(==) :: ExprAST ast => ast -> ast -> ast
-(==) = operator AST.OpEQ
+infix 4 .==
+(.==) :: ExprAST ast => ast -> ast -> ast
+(.==) = operator AST.OpEQ
 
-infix 4 /=
-(/=) :: ExprAST ast => ast -> ast -> ast
-(/=) x y = neg (x == y)
+infix 4 ./=
+(./=) :: ExprAST ast => ast -> ast -> ast
+(./=) x y = neg (x .== y)
 
 -- | Allows the usage of strings directly as references in our AST.
 instance IsString (Code AST.Expression) where
@@ -276,6 +265,16 @@ instance Num (Code AST.Expression) where
   fromInteger = litI . fromInteger
 
 -- * Statement DSL
+{-
+class StmtAST ast where
+  type Expr ast :: *
+  skip     :: ast
+  assert   :: Expr ast -> ast
+  assume   :: Expr ast -> ast
+  ndet     :: ast -> ast -> ast
+  while    :: Expr ast -> ast -> ast
+  invWhile :: Expr ast -> Expr ast -> ast -> ast
+  assign   :: -}
 
 skip :: Code ()
 skip = emit $ AST.Skip
