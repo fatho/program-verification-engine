@@ -27,6 +27,7 @@ symOperator GCL.OpPlus = svPlus
 symOperator GCL.OpMinus = svMinus
 symOperator GCL.OpTimes = svTimes
 symOperator GCL.OpImplies = \a b -> svOr (svNot a) b
+symOperator GCL.OpIff = \a b -> svOr (svAnd a b) (svAnd (svNot a) (svNot b))
 symOperator GCL.OpAnd = svAnd
 symOperator GCL.OpOr = svOr
 

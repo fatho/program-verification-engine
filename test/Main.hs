@@ -56,5 +56,5 @@ main = do
      -}
      liftIO $ prettyPrint 100 $ result
      putStrLn ""
-     liftIO $ prettyPrint 100 $ interpretTree wlp
+     --liftIO $ prettyPrint 100 $ interpretTree wlp
      putStrLn ""

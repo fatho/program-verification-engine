@@ -7,7 +7,7 @@ import           GCL.DSL
 -- * Examples
 
 allPrograms :: [Either GclError Program]
-allPrograms = [ d1, d2, swap, minind, simple ]
+allPrograms = [ d1, d2, swap, minind, simple, fixpointCheck ]
 
 d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
@@ -54,3 +54,10 @@ simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
   assume $ "j" .== 0
   "r" $= "i" + "j"
   assert $ "r" .== "i"
+
+fixpointCheck :: Either GclError Program
+fixpointCheck = program "fixpointCheck" ["x" `as` int] ["y" `as` int ] $ do
+  "y" $= "x"
+  while ("y" .> 0) $ do
+    "y" $= "y" - 1
+  assert $ "y" .== 0

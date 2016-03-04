@@ -75,8 +75,27 @@ wlp stmt postcond = go stmt postcond where
         return (neg cnd /\ q)
   -- invariant not provided
   go (AST.InvWhile Nothing cnd s) q = do
-    trace "cannot infer invariant yet, requiring that loop is never executed"
-    return (neg cnd /\ q)
+    --trace "cannot infer invariant yet, requiring that loop is never executed"
+    --return (neg cnd /\ q)
+    trace "Trying to compute fixpoint of loop precondition"
+    fixpointWhile 5 cnd s q
+
+fixpointWhile :: MonadProver m => Int -> Predicate -> AST.Statement -> Predicate -> m Predicate
+fixpointWhile maxIterations loopCnd loopBody postCnd = run maxIterations true where
+  run i old
+    | i <= 0 = do
+        trace "reached limit for fixpoint iteration, requiring that loop is never executed"
+        return (neg loopCnd /\ postCnd)
+    | otherwise = do
+        trace $ "Fixpoint iter. #" ++ show (maxIterations - i + 1)
+        new <- f old
+        prove (quantifyFree $ new <=> old) >>= \case
+          True -> return old -- reached fixpoint
+          False -> run (i-1) new
+
+  f q = do
+    w <- wlp loopBody q
+    return $ (loopCnd /\ w) \/ (neg loopCnd /\ postCnd)
 
 finiteUnroll :: (Predicate -> AST.Statement) -> Int -> Predicate -> AST.Statement -> AST.Statement
 finiteUnroll baseCase numUnroll loopGuard body = go numUnroll where

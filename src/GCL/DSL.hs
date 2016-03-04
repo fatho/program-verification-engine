@@ -227,6 +227,10 @@ infixr 1 ==>
 (==>) :: ExprAST ast => ast -> ast -> ast
 (==>) = operator AST.OpImplies
 
+infixr 1 <=>
+(<=>) :: ExprAST ast => ast -> ast -> ast
+(<=>) = operator AST.OpIff
+
 infix 4 .<=
 (.<=) :: ExprAST ast => ast -> ast -> ast
 (.<=) = operator AST.OpLEQ

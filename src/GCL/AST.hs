@@ -45,6 +45,7 @@ data Operator = OpLEQ
               | OpMinus
               | OpTimes
               | OpImplies
+              | OpIff
               | OpAnd
               | OpOr
   deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
@@ -166,6 +167,7 @@ instance PP.Pretty Operator where
   pretty OpMinus = "-"
   pretty OpTimes = "*"
   pretty OpImplies = "==>"
+  pretty OpIff = "<=>"
   pretty OpAnd = "&&"
   pretty OpOr = "||"
 
