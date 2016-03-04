@@ -78,6 +78,14 @@ wlp stmt postcond = go stmt postcond where
     trace "cannot infer invariant yet, requiring that loop is never executed"
     return (neg cnd /\ q)
 
+finiteUnroll :: (Predicate -> AST.Statement) -> Int -> Predicate -> AST.Statement -> AST.Statement
+finiteUnroll baseCase numUnroll loopGuard body = go numUnroll where
+  go k
+    | k Prelude.<= 0 = baseCase (neg loopGuard)
+    | otherwise      = astIf loopGuard (AST.Block [body, go (k-1)]) AST.Skip
+  astIf cnd thenB elseB = AST.NDet
+    (AST.Block [AST.Assume cnd, thenB])
+    (AST.Block [AST.Assume (neg cnd), elseB])
 
 data WlpResult
   = Verified Predicate
