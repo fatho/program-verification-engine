@@ -37,17 +37,25 @@ swap = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as
 
 minind :: Either GclError Program
 minind = program "minind" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" `as` int] $ do
+  assume $ "i" .< "N"
   var ["i0" `as` int] $ do
    "i0" $= "i"
    var ["min" `as` int] $ do
      ["min", "r"] $$= ["a" ! "i", "i"]
-     let iv = "i" .<= "N" /\ forall ("j" `as` int) ("i0" .<= "j" /\ "j" .< "i" ==> "a" ! "r" .<= "a" ! "j")
+     "i" $= "i" + 1
+     let iv = "i0" .< "N"  -- capture information about lower bound of range
+           /\ "i0" .<= "i"
+           /\ "i" .<= "N"  -- we never exceed the range
+           /\ "i0" .<= "r"
+           /\ "r" .< "i"
+           /\ "min" .== "a" ! "r" -- r points to minimum element found so far
+           /\ forall ("j" `as` int) ("i0" .<= "j" /\ "j" .< "i" ==> "a" ! "r" .<= "a" ! "j")
      invWhile (Just iv) ("i" .< "N") $ do
        if_ ("a" ! "i" .< "min")
          (["min", "r"] $$= ["a" ! "i", "i"])
          skip
        "i" $= "i" + 1
-   assert $ forall ("j" `as` int) $ "i0" .<= "j" /\ "j" .< "N" ==> "a" ! "r" .<= "a" ! "j"
+   assert $ forall ("k" `as` int) $ "i0" .<= "k" /\ "k" .< "N" ==> "a" ! "r" .<= "a" ! "k"
 
 simple :: Either GclError Program
 simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
