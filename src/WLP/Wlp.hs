@@ -115,8 +115,8 @@ wlp WlpConfig{..} stmt postcond = go stmt postcond where
   go (AST.InvWhile (Just iv) cnd s) q
     | not alwaysInferInvariant && checkInvariantAnnotation = do
         preInv <- go s iv
-        let preserveInv = AST.quantifyFree $ iv /\ cnd ==> preInv
-            postcnd     = AST.quantifyFree $ iv /\ neg cnd ==> q
+        let preserveInv = prepare $ iv /\ cnd ==> preInv
+            postcnd     = prepare $ iv /\ neg cnd ==> q
             -- pass simplified expression to prover: it's easier to read & debug for humans
             -- (provided there's no error in the simplifier of course)
             --theorem     = AST.quantifyFree (preserveInv /\ postcnd)
@@ -156,6 +156,8 @@ wlp WlpConfig{..} stmt postcond = go stmt postcond where
     trace "invoking invariant inference"
     invariantInference args
 
+  prepare = AST.quantifyFree AST.ForAll . AST.makeQuantifiersUnique
+
 -- | Returns for every loop an invariant that ensures that the loop is never executed and
 -- the post-condition already holds
 neverExecuteInference :: Monad m => InvariantInference m
@@ -173,7 +175,7 @@ fixpointInference maxIterations InvariantInferenceArgs{..} = run 1 true where
     | otherwise = do
         trace $ "Fixpoint iter. #" ++ show i
         new <- f old
-        prove (AST.quantifyFree $ new <=> old) >>= \case
+        prove (AST.quantifyFree AST.ForAll $ AST.makeQuantifiersUnique $ new <=> old) >>= \case
           True -> return old -- reached fixpoint
           False -> run (i+1) new
 

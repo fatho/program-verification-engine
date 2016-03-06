@@ -65,6 +65,7 @@ simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
 
 fixpointCheck :: Either GclError Program
 fixpointCheck = program "fixpointCheck" ["x" `as` int] ["y" `as` int ] $ do
+  assume $ "x" .> 10
   "y" $= "x"
   while ("y" .> 0) $ do
     "y" $= "y" - 1
