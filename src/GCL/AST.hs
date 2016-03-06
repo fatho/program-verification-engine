@@ -4,17 +4,40 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE KindSignatures            #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE StandaloneDeriving        #-}
 {- | Contains the AST of the Guarded Common Language.
 -}
-module GCL.AST where
+module GCL.AST
+  ( -- * AST types
+    Name
+  , PrimitiveType (..)
+  , Type (..)
+  , UVar (..)
+  , QVar (..)
+  , Operator (..)
+  , Program (..)
+  , Decl (..)
+  , Statement (..)
+  , Expression (..)
+    -- * AST Query Functions
+  , containsVar
+  , freeVariables
+    -- * AST Manipulation
+  , subst
+  , quantifyFree
+  )
+  where
 import           Data.String
 
 import           Control.Lens.Plated
 import           Data.Data
 import           Data.Data.Lens
+import           Data.Maybe
 import           Data.Monoid
+import           Data.Set                     (Set)
+import qualified Data.Set                     as S
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 -- | The type of names.
@@ -45,6 +68,7 @@ data Operator = OpLEQ
               | OpMinus
               | OpTimes
               | OpImplies
+              | OpIff
               | OpAnd
               | OpOr
   deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
@@ -102,8 +126,27 @@ instance Num Expression where
   signum e = IfThenElse (BinOp OpLT e 0) (-1) (IfThenElse (BinOp OpEQ e 0) 0 1)
   fromInteger = IntLit . fromInteger
 
+-- * Useful helper functions
+
 containsVar :: QVar -> Expression -> Bool
 containsVar v p = Ref v `elem` universe p
+
+subst :: [(QVar, Expression)] -> Expression -> Expression
+subst sub = transform $ \case
+  v@(Ref name) -> fromMaybe v (lookup name sub)
+  -- we don't need to worry about the binding of "foralls" at this
+  -- point since the names have already been made unique
+  other           -> other
+
+freeVariables :: Expression -> Set QVar
+freeVariables = para go where
+  go (Ref qv) = S.insert qv . S.unions
+  go (ForAll (Decl v _) _) = S.delete v . S.unions
+  go _            = S.unions
+
+quantifyFree :: Expression -> Expression
+quantifyFree p = foldr quantify p (freeVariables p) where
+  quantify qv@(QVar _ _ ty) inner = ForAll (Decl qv ty) inner
 
 -- * Pretty Printing
 
@@ -166,6 +209,7 @@ instance PP.Pretty Operator where
   pretty OpMinus = "-"
   pretty OpTimes = "*"
   pretty OpImplies = "==>"
+  pretty OpIff = "<=>"
   pretty OpAnd = "&&"
   pretty OpOr = "||"
 

@@ -12,14 +12,63 @@
 {- | Contains an embedded domain specific language for generating a
 program in the Guarded Common Language represented by "GCL.AST".
 -}
-module GCL.DSL where
-
-import           Prelude              hiding ((&&), (/=), (<), (<=), (==), (>),
-                                       (>=), (||))
+module GCL.DSL
+  (
+    -- * DSL Monad
+    Code
+  , CodeGenEnv (..)
+  , CodeGenState (..)
+  , VarInfo
+  , varType
+  , varQualifiedName
+  , CodeBlock
+  , GclError
+  , runCode
+  , execCode
+    -- * Code Generation Primitives
+  , declare
+  , emit
+  , extractCode
+  , extractStmt
+  , lookupVar
+  , mkQualifiedVar
+  , nested
+  , unique
+    -- * Program DSL
+  , program
+    -- * Type DSL
+  , int
+  , boolean
+  , array
+  , as
+    -- * Expression DSL
+  , ExprAST (..)
+  , exists
+  , true
+  , false
+    -- * Boolean Operators
+  , (!) , (/\) , (\/) , (∧) , (∨) , (==>) , (<=>)
+    -- * Relational Operators
+  , (.<=) , (.>=) , (.>) , (.<) , (.==) , (./=)
+    -- * Statement DSL
+  , assert
+  , assume
+  , if_
+  , invWhile
+  , ndet
+  , skip
+  , var
+  , while
+  , ($=)
+  , ($$=)
+  ) where
 
 import qualified GCL.AST              as AST
 
-import           Control.Lens
+import           Control.Lens.Getter
+import           Control.Lens.Lens
+import           Control.Lens.Setter
+import           Control.Lens.TH
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.RWS
@@ -226,41 +275,37 @@ infixr 2 ∨
 (∨) :: ExprAST ast => ast -> ast -> ast
 (∨) = (\/)
 
-infixr 3 &&
-(&&) :: ExprAST ast => ast -> ast -> ast
-(&&) = (/\)
-
-infixr 2 ||
-(||) :: ExprAST ast => ast -> ast -> ast
-(||) = (\/)
-
 infixr 1 ==>
 (==>) :: ExprAST ast => ast -> ast -> ast
 (==>) = operator AST.OpImplies
 
-infix 4 <=
-(<=) :: ExprAST ast => ast -> ast -> ast
-(<=) = operator AST.OpLEQ
+infixr 1 <=>
+(<=>) :: ExprAST ast => ast -> ast -> ast
+(<=>) = operator AST.OpIff
 
-infix 4 >=
-(>=) :: ExprAST ast => ast -> ast -> ast
-(>=) = operator AST.OpGEQ
+infix 4 .<=
+(.<=) :: ExprAST ast => ast -> ast -> ast
+(.<=) = operator AST.OpLEQ
 
-infix 4 >
-(>) :: ExprAST ast => ast -> ast -> ast
-(>) = operator AST.OpGT
+infix 4 .>=
+(.>=) :: ExprAST ast => ast -> ast -> ast
+(.>=) = operator AST.OpGEQ
 
-infix 4 <
-(<) :: ExprAST ast => ast -> ast -> ast
-(<) = operator AST.OpLT
+infix 4 .>
+(.>) :: ExprAST ast => ast -> ast -> ast
+(.>) = operator AST.OpGT
 
-infix 4 ==
-(==) :: ExprAST ast => ast -> ast -> ast
-(==) = operator AST.OpEQ
+infix 4 .<
+(.<) :: ExprAST ast => ast -> ast -> ast
+(.<) = operator AST.OpLT
 
-infix 4 /=
-(/=) :: ExprAST ast => ast -> ast -> ast
-(/=) x y = neg (x == y)
+infix 4 .==
+(.==) :: ExprAST ast => ast -> ast -> ast
+(.==) = operator AST.OpEQ
+
+infix 4 ./=
+(./=) :: ExprAST ast => ast -> ast -> ast
+(./=) x y = neg (x .== y)
 
 -- | Allows the usage of strings directly as references in our AST.
 instance IsString (Code AST.Expression) where
@@ -276,6 +321,16 @@ instance Num (Code AST.Expression) where
   fromInteger = litI . fromInteger
 
 -- * Statement DSL
+{-
+class StmtAST ast where
+  type Expr ast :: *
+  skip     :: ast
+  assert   :: Expr ast -> ast
+  assume   :: Expr ast -> ast
+  ndet     :: ast -> ast -> ast
+  while    :: Expr ast -> ast -> ast
+  invWhile :: Expr ast -> Expr ast -> ast -> ast
+  assign   :: -}
 
 skip :: Code ()
 skip = emit $ AST.Skip
