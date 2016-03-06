@@ -12,11 +12,63 @@
 {- | Contains an embedded domain specific language for generating a
 program in the Guarded Common Language represented by "GCL.AST".
 -}
-module GCL.DSL where
+module GCL.DSL
+  (
+    -- * DSL Monad
+    Code
+  , CodeGenEnv (..)
+  , CodeGenState (..)
+  , VarInfo
+  , varType
+  , varQualifiedName
+  , CodeBlock
+  , GclError
+  , runCode
+  , execCode
+    -- * Code Generation Primitives
+  , declare
+  , emit
+  , extractCode
+  , extractStmt
+  , lookupVar
+  , mkQualifiedVar
+  , nested
+  , unique
+    -- * Program DSL
+  , program
+    -- * Type DSL
+  , int
+  , boolean
+  , array
+  , as
+    -- * Expression DSL
+  , ExprAST (..)
+  , exists
+  , true
+  , false
+    -- * Boolean Operators
+  , (!) , (/\) , (\/) , (∧) , (∨) , (==>) , (<=>)
+    -- * Relational Operators
+  , (.<=) , (.>=) , (.>) , (.<) , (.==) , (./=)
+    -- * Statement DSL
+  , assert
+  , assume
+  , if_
+  , invWhile
+  , ndet
+  , skip
+  , var
+  , while
+  , ($=)
+  , ($$=)
+  ) where
 
 import qualified GCL.AST              as AST
 
-import           Control.Lens
+import           Control.Lens.Getter
+import           Control.Lens.Lens
+import           Control.Lens.Setter
+import           Control.Lens.TH
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.RWS

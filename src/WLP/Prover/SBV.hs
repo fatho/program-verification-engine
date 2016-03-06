@@ -1,7 +1,12 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE RecordWildCards #-}
-module WLP.Prover.SBV where
+{-| Defines an interpreter for the 'WLP.Interface.WLP' free monad using "Data.SBV" as a backend for theorem proving.
+-}
+module WLP.Prover.SBV
+  ( -- * Interface
+    interpretSBV
+  ) where
 
 import           Control.Monad
 import           Control.Monad.Free
@@ -14,9 +19,11 @@ import           Data.SBV.Dynamic
 import qualified GCL.AST                as GCL
 import           WLP.Interface
 
+-- | Generates an SBV name for a 'QVar'.
 qvarString :: GCL.QVar -> String
 qvarString (GCL.QVar names uid _) = intercalate "_" names ++ "_" ++ show uid
 
+-- | Translates an operator to SBV.
 symOperator :: GCL.Operator -> SVal -> SVal -> SVal
 symOperator GCL.OpLEQ = svLessEq
 symOperator GCL.OpEQ = svEqual
@@ -31,17 +38,25 @@ symOperator GCL.OpIff = \a b -> svOr (svAnd a b) (svAnd (svNot a) (svNot b))
 symOperator GCL.OpAnd = svAnd
 symOperator GCL.OpOr = svOr
 
+-- | Returns the SBV kind corresponding to a GCL type.
 kindOfType :: GCL.PrimitiveType -> Kind
 kindOfType GCL.IntType = KUnbounded
 kindOfType GCL.BoolType = KBool
 
-data Sym = Val SVal | Arr SArr
+-- | A symbolic value
+data Sym
+  = Val SVal
+    -- ^ symbolic primitive value
+  | Arr SArr
+    -- ^ symbolic array
 
+-- | Asserts that we got an 'SVal' inside a 'Sym'.
 requireVal :: Monad m => m Sym -> m SVal
 requireVal symV = do
   Val v <- symV
   return v
 
+-- | Builds an SBV theorem from a (boolean) GCL expression. Type correctness is not checked.
 buildTheorem :: GCL.Expression -> Symbolic Sym
 buildTheorem = go Map.empty where
   go env expr = case expr of
@@ -83,8 +98,13 @@ buildTheorem = go Map.empty where
       Val f <- go env fval
       return $ Val $ svIte c t f
 
-
-interpretSBV :: MonadIO m => SMTConfig -> OutputMode -> (Predicate -> m ()) -> WLP a -> m a
+-- | The free monad interpreter using SBV.
+interpretSBV :: MonadIO m
+             => SMTConfig           -- ^ the configuration telling SBV what prover it should use
+             -> OutputMode          -- ^ controls the verbosity of the computation
+             -> (Predicate -> m ()) -- ^ a function to trace a predicate (used in 'TraceMode')
+             -> WLP a               -- ^ the WLP computation
+             -> m a
 interpretSBV smt outputMode tracePredicate = iterM run where
   run (Prove predi cont) = do
     let thm = requireVal $ buildTheorem predi
