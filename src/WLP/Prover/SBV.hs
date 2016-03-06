@@ -1,11 +1,13 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 module WLP.Prover.SBV where
 
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
+import           Control.Concurrent.Async
 import           Data.List              (intercalate)
 import qualified Data.Map.Strict        as Map
 import qualified Data.SBV.Bridge.Z3     as Z3
@@ -98,3 +100,26 @@ interpretSBV smt outputMode tracePredicate = iterM run where
 
   runIfTrace :: Monad m => m () -> m ()
   runIfTrace = when (outputMode == TraceMode)
+
+
+parInterpretSBV :: SMTConfig -> WLP a -> IO a
+parInterpretSBV smt = iterM run where
+  run (Prove predi cont) = do
+    let thm = requireVal $ buildTheorem predi
+
+    tCont <- async $ liftIO $ cont True
+    fCont <- async $ liftIO $ cont False
+
+    liftIO $ withAsync (proveWith smt thm) $ \result -> do
+      res <- wait result
+      pickCont (not $ Z3.modelExists res) tCont fCont
+
+  run (Trace _ cont) = cont
+
+  pickCont :: Bool -> Async a -> Async a -> IO a
+  pickCont True a b = do
+    cancel b
+    wait a
+  pickCont False a b = do
+    cancel a
+    wait b
