@@ -36,6 +36,7 @@ module GCL.DSL
   , unique
     -- * Program DSL
   , program
+  , programFromSpec
     -- * Type DSL
   , int
   , boolean
@@ -145,6 +146,14 @@ program name inputVars outputVars code = fst <$> evalCode ast initEnv initState 
     }
 
   initState = CodeGenState { _nextUnique = 0  }
+
+
+-- | Creates a program from a specification.
+programFromSpec :: AST.Name -> [AST.Decl AST.UVar] -> [AST.Decl AST.UVar] -> Code AST.Expression -> Code AST.Expression -> Either GclError AST.Program
+programFromSpec name inputVars outputVars precondition postcondition = program name inputVars outputVars $ do
+  assert precondition
+  assume postcondition
+
 
 -- | Returns a unique number.
 unique :: Code Int
