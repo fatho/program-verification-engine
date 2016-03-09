@@ -83,15 +83,19 @@ buildTheorem = go Map.empty where
     GCL.NegExp ex -> do
       Val nVal <- go env ex
       return $ Val $ svNot nVal
-    GCL.ForAll (GCL.Decl var varTy) ex -> do
+    GCL.Quantify quantifier (GCL.Decl var varTy) ex -> do
       case varTy of
         GCL.BasicType ty -> do
           let kind = kindOfType ty
               name = qvarString var
-          svar <- svMkSymVar (Just ALL) kind (Just name)
+              sbvQ = case quantifier of
+                       GCL.ForAll -> ALL
+                       GCL.Exists -> EX
+          svar <- svMkSymVar (Just sbvQ) kind (Just name)
           go (Map.insert var (Val svar) env) ex
         GCL.ArrayType ty -> do
           let kind = kindOfType ty
+          when (quantifier == GCL.Exists) $ fail "existential array quantification not supported by backend"
           sarr <- newSArr (KUnbounded, kind) (const $ qvarString var) Nothing
           go (Map.insert var (Arr sarr) env) ex
     GCL.IfThenElse cond tval fval -> do
@@ -109,8 +113,13 @@ interpretSBV :: MonadIO m
              -> m a
 interpretSBV smt outputMode tracePredicate = iterM run where
   run (Prove predi cont) = do
-    let thm = requireVal $ buildTheorem predi
-    runIfTrace (tracePredicate predi)
+    let prenexPred = GCL.prenex $ predi
+        thm = requireVal $ buildTheorem prenexPred
+    runIfTrace $ do
+      liftIO $ putStrLn "Input formula:"
+      tracePredicate predi
+      liftIO $ putStrLn "Prenex normal form:"
+      tracePredicate prenexPred
     result <- liftIO $ proveWith smt thm
     runIfTrace (liftIO $ print result)
     cont (not $ Z3.modelExists result)

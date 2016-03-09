@@ -165,27 +165,30 @@ wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
   go (AST.InvWhile (Just iv) cnd s) q
     | not alwaysInferInvariant && checkInvariantAnnotation = do
         preInv <- go s iv
-        let preserveInv = iv /\ cnd ==> preInv
-            postcnd     = iv /\ neg cnd ==> q
+        let preserveInv = prepare $ iv /\ cnd ==> preInv
+            postcnd     = prepare $ iv /\ neg cnd ==> q
             -- pass simplified expression to prover: it's easier to read & debug for humans
             -- (provided there's no error in the simplifier of course)
-            theorem     = AST.quantifyFree (preserveInv /\ postcnd)
+            --theorem     = AST.quantifyFree (preserveInv /\ postcnd)
 
         trace "trying to prove invariant is preserved"
-        prove theorem >>= \case
-          -- if the invariant is preserved and we can prove the post-condition when exiting the loop,
-          -- we only require that the invariant holds in the beginning
-          True -> do
+        preserved <- prove preserveInv
+        trace "trying to prove post condition"
+        postValid <- prove postcnd
+        if preserved && postValid
+          then do
+            -- if the invariant is preserved and we can prove the post-condition when exiting the loop,
+            -- we only require that the invariant holds in the beginning
             trace "invariant valid: choosing invariant as precondition"
             return iv
           -- otherwise, we require that loop is never executed in addition to the post-condition
-          False -> case invalidInvariantBehavior of
-              NeverExecute -> do
-                trace "invariant invalid: requiring that loop is never executed"
-                return (neg cnd /\ q)
-              Infer -> do
-                trace "invariant invalid: trying to infer an invariant"
-                inferInv (Just iv) cnd s q
+          else case invalidInvariantBehavior of
+            NeverExecute -> do
+              trace "invariant invalid: requiring that loop is never executed"
+              return (neg cnd /\ q)
+            Infer -> do
+              trace "invariant invalid: trying to infer an invariant"
+              inferInv (Just iv) cnd s q
     | not alwaysInferInvariant && not checkInvariantAnnotation = do
         trace "assuming user-supplied invariant is correct"
         return iv
@@ -202,6 +205,8 @@ wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
           }
     trace "invoking invariant inference"
     invariantInference args
+
+  prepare = AST.quantifyFree AST.ForAll . AST.makeQuantifiersUnique
 
 -- | Returns for every loop an invariant that ensures that the loop is never executed and
 -- the post-condition already holds
@@ -220,7 +225,7 @@ fixpointInference maxIterations InvariantInferenceArgs{..} = run 1 true where
     | otherwise = do
         trace $ "Fixpoint iter. #" ++ show i
         new <- f old
-        prove (AST.quantifyFree $ new <=> old) >>= \case
+        prove (AST.quantifyFree AST.ForAll $ AST.makeQuantifiersUnique $ new <=> old) >>= \case
           True -> return old -- reached fixpoint
           False -> run (i+1) new
 

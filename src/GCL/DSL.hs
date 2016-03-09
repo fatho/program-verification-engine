@@ -36,6 +36,7 @@ module GCL.DSL
   , unique
     -- * Program DSL
   , program
+  , programFromSpec
     -- * Type DSL
   , int
   , boolean
@@ -43,7 +44,6 @@ module GCL.DSL
   , as
     -- * Expression DSL
   , ExprAST (..)
-  , exists
   , true
   , false
     -- * Boolean Operators
@@ -148,6 +148,14 @@ program name inputVars outputVars code = fst <$> evalCode ast initEnv initState 
 
   initState = CodeGenState { _nextUnique = 0  }
 
+
+-- | Creates a program from a specification.
+programFromSpec :: AST.Name -> [AST.Decl AST.UVar] -> [AST.Decl AST.UVar] -> Code AST.Expression -> Code AST.Expression -> Either GclError AST.Program
+programFromSpec name inputVars outputVars precondition postcondition = program name inputVars outputVars $ do
+  assert precondition
+  assume postcondition
+
+
 -- | Returns a unique number.
 unique :: Code Int
 unique = nextUnique <<+= 1
@@ -215,6 +223,8 @@ class ExprAST ast where
   neg :: ast -> ast
   -- | Creates a forall quantifier.
   forall :: AST.Decl (ExpVar ast) -> ast -> ast
+  -- | Creates an exists quantifier.
+  exists :: AST.Decl (ExpVar ast) -> ast -> ast
   -- | If-then-else expression (ternary operator).
   ite :: ast -> ast -> ast -> ast
 
@@ -236,7 +246,8 @@ instance ExprAST AST.Expression where
   arrIndex = AST.Index
   repBy = AST.RepBy
   neg = AST.NegExp
-  forall = AST.ForAll
+  forall = AST.Quantify AST.ForAll
+  exists = AST.Quantify AST.Exists
   ite = AST.IfThenElse
 
 instance ExprAST (Code AST.Expression) where
@@ -249,11 +260,9 @@ instance ExprAST (Code AST.Expression) where
   arrIndex = liftM2 AST.Index
   repBy arr idx expr = liftM3 AST.RepBy arr idx expr
   neg = liftM AST.NegExp
-  forall udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.ForAll qdecl) quantExp
+  forall udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.Quantify AST.ForAll qdecl) quantExp
+  exists udecl quantExp = declare [udecl] $ \[qdecl] -> liftM (AST.Quantify AST.Exists qdecl) quantExp
   ite = liftM3 AST.IfThenElse
-
-exists :: ExprAST ast => AST.Decl (ExpVar ast) -> ast -> ast
-exists udecl quantExp = neg $ forall udecl (neg quantExp)
 
 -- | The array index operator.
 infixl 9 !

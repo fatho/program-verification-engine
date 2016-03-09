@@ -7,7 +7,7 @@ import           GCL.DSL
 -- * Examples
 
 allPrograms :: [Either GclError Program]
-allPrograms = [ d1, d2, swap, minind, simple, fixpointCheck ]
+allPrograms = [ d1, d2, swap, minind, minindEx, simple, fixpointCheck ]
 
 d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
@@ -37,17 +37,49 @@ swap = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as
 
 minind :: Either GclError Program
 minind = program "minind" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" `as` int] $ do
+  assume $ "i" .< "N"
   var ["i0" `as` int] $ do
    "i0" $= "i"
    var ["min" `as` int] $ do
      ["min", "r"] $$= ["a" ! "i", "i"]
-     let iv = "i" .<= "N" /\ forall ("j" `as` int) ("i0" .<= "j" /\ "j" .< "i" ==> "a" ! "r" .<= "a" ! "j")
+     "i" $= "i" + 1 -- NB: this is different from the version of the exercise, therefore the invariant is simpler
+     let iv = "i0" .< "N"  -- capture information about lower bound of range
+           /\ "i0" .<= "i"
+           /\ "i" .<= "N"  -- we never exceed the range
+           /\ "i0" .<= "r"
+           /\ "r" .< "i"
+           /\ "min" .== "a" ! "r" -- r points to minimum element found so far
+           /\ forall ("j" `as` int) ("i0" .<= "j" /\ "j" .< "i" ==> "a" ! "r" .<= "a" ! "j")
      invWhile (Just iv) ("i" .< "N") $ do
        if_ ("a" ! "i" .< "min")
          (["min", "r"] $$= ["a" ! "i", "i"])
          skip
        "i" $= "i" + 1
-   assert $ forall ("j" `as` int) $ "i0" .<= "j" /\ "j" .< "N" ==> "a" ! "r" .<= "a" ! "j"
+   assert $ forall ("k" `as` int) $ "i0" .<= "k" /\ "k" .< "N" ==> "a" ! "r" .<= "a" ! "k"
+
+
+minindEx :: Either GclError Program
+minindEx = program "minindEx" ["a" `as` array int, "i" `as` int, "N" `as` int] ["r" `as` int] $ do
+  assume $ "i" .< "N"
+  var ["i0" `as` int] $ do
+   "i0" $= "i"
+   var ["min" `as` int] $ do
+     ["min", "r"] $$= ["a" ! "i", "i"]
+     let iv = "i0" .< "N"  -- capture information about lower bound of range
+           /\ "i0" .<= "i"
+           /\ "i" .<= "N"  -- we never exceed the range
+           /\ "i0" .<= "r"
+           -- NB: here we need the more complicated invariant because in the beginning, r == i, whereas every time afterwards we have r < i
+           /\ ("i" .== "i0" ==> "r" .== "i")
+           /\ ("i" .> "i0" ==> "r" .< "i")
+           /\ "min" .== "a" ! "r" -- r points to minimum element found so far
+           /\ forall ("j" `as` int) ("i0" .<= "j" /\ "j" .< "i" ==> "a" ! "r" .<= "a" ! "j")
+     invWhile (Just iv) ("i" .< "N") $ do
+       if_ ("a" ! "i" .< "min")
+         (["min", "r"] $$= ["a" ! "i", "i"])
+         skip
+       "i" $= "i" + 1
+   assert $ forall ("k" `as` int) $ "i0" .<= "k" /\ "k" .< "N" ==> "a" ! "r" .<= "a" ! "k"
 
 simple :: Either GclError Program
 simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
@@ -57,6 +89,7 @@ simple = program "simple" [ "i" `as` int, "j" `as` int] ["r" `as` int ] $ do
 
 fixpointCheck :: Either GclError Program
 fixpointCheck = program "fixpointCheck" ["x" `as` int] ["y" `as` int ] $ do
+  assume $ "x" .> 10
   "y" $= "x"
   while ("y" .> 0) $ do
     "y" $= "y" - 1

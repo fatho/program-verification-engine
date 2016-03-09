@@ -16,7 +16,7 @@ import qualified Text.PrettyPrint.ANSI.Leijen as PP
 import           TestPrograms
 
 prettyPrint :: (MonadIO m, PP.Pretty a) => Int -> a -> m ()
-prettyPrint width = liftIO . PP.displayIO stdout . PP.renderPretty 0.8 width . (PP.<> PP.line) . PP.pretty
+prettyPrint width = liftIO . PP.displayIO stdout . PP.renderSmart 0.6 width . (PP.<> PP.line) . PP.pretty
 
 interpretTree :: PP.Pretty a => Prover.WLP a -> PP.Doc
 interpretTree = iter run . fmap PP.pretty where
@@ -49,9 +49,10 @@ main = do
      liftIO $ prettyPrint 100 prog
      putStrLn ""
      putStrLn ""
-     
-     let wlp = WLP.wlpProgram WLP.defaultConfig prog
-     result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 100) wlp
+
+     let cfg = (WLP.defaultConfig :: WLP.WlpConfig Prover.WLP) { WLP.invariantInference = WLP.fixpointInference Nothing }
+         wlp = WLP.wlpProgram cfg prog
+     result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 160) wlp
      {-
      let result = WLP.wlpProgram prog
      -}

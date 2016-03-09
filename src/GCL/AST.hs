@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE KindSignatures            #-}
@@ -20,6 +21,7 @@ module GCL.AST
   , Program (..)
   , Decl (..)
   , Statement (..)
+  , Quantifier (..)
   , Expression (..)
     -- * AST Query Functions
   , containsVar
@@ -27,17 +29,22 @@ module GCL.AST
     -- * AST Manipulation
   , subst
   , quantifyFree
+  , prenex
+  , makeQuantifiersUnique
   )
   where
 import           Data.String
 
-import           Control.Lens.Plated
+import           Control.Lens
+import           Control.Monad.State
 import           Data.Data
 import           Data.Data.Lens
+import           Data.Map                     (Map)
+import qualified Data.Map                     as Map
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Set                     (Set)
-import qualified Data.Set                     as S
+import qualified Data.Set                     as Set
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 -- | The type of names.
@@ -102,15 +109,18 @@ data Statement = Skip
 
   deriving (Eq, Ord, Show, Data, Typeable)
 
+data Quantifier = ForAll | Exists
+  deriving (Eq, Ord, Enum, Bounded, Read, Show, Typeable, Data)
+
 data Expression = IntLit Int
-                | BoolLit Bool
                 | Ref QVar
-                | BinOp Operator Expression Expression
                 | Index Expression Expression
                 | RepBy Expression Expression Expression
                 | NegExp Expression
-                | ForAll (Decl QVar) Expression
                 | IfThenElse Expression Expression Expression
+                | BinOp Operator Expression Expression
+                | BoolLit Bool
+                | Quantify Quantifier (Decl QVar) Expression
   deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Plated Expression where
@@ -142,13 +152,56 @@ subst sub = transform $ \case
 
 freeVariables :: Expression -> Set QVar
 freeVariables = para go where
-  go (Ref qv) = S.insert qv . S.unions
-  go (ForAll (Decl v _) _) = S.delete v . S.unions
-  go _            = S.unions
+  go (Ref qv) = Set.insert qv . Set.unions
+  go (Quantify _ (Decl v _) _) = Set.delete v . Set.unions
+  go _            = Set.unions
 
-quantifyFree :: Expression -> Expression
-quantifyFree p = foldr quantify p (freeVariables p) where
-  quantify qv@(QVar _ _ ty) inner = ForAll (Decl qv ty) inner
+quantifyFree :: Quantifier -> Expression -> Expression
+quantifyFree quantifier p = foldr quantify p (freeVariables p) where
+  quantify qv@(QVar _ _ ty) inner = Quantify quantifier (Decl qv ty) inner
+
+makeQuantifiersUnique :: Expression -> Expression
+makeQuantifiersUnique expr = evalState (go (Map.fromSet id $ freeVariables expr) expr) (maxId + 1) where
+  maxId = para maxId' expr
+
+  maxId' (Ref (QVar _ uid _)) = max uid . maximum . (0 :)
+  maxId' (Quantify _ (Decl (QVar _ uid _) _) _) = max uid . maximum . (0 :)
+  maxId' _ = maximum . (0 :)
+
+  go env (Ref var) = return $ Ref (env Map.! var)
+  go env (Quantify q (Decl var@(QVar names _ _) ty) body) = do
+    unique <- get
+    put (unique + 1)
+    let newVar = QVar names unique ty
+    newBody <- go (Map.insert var newVar env) body
+    return $ Quantify q (Decl newVar ty) newBody
+  go env other = mapMOf plate (go env) other
+
+-- | Converts a boolean expression into prenex normal form
+prenex :: Expression -> Expression
+prenex = transform pullQuantifiers . pushNeg False . elimArrows where
+  elimArrows = transform $ \case
+    BinOp OpImplies p q -> BinOp OpOr (NegExp p) q
+    BinOp OpIff p q -> BinOp OpOr (BinOp OpAnd p q) (BinOp OpAnd (NegExp p) (NegExp q))
+    x -> x
+
+  pushNeg isNeg (BinOp OpAnd p q) = BinOp (if isNeg then OpOr else OpAnd) (pushNeg isNeg p) (pushNeg isNeg q)
+  pushNeg isNeg (BinOp OpOr p q) = BinOp (if isNeg then OpAnd else OpOr) (pushNeg isNeg p) (pushNeg isNeg q)
+  pushNeg isNeg (NegExp e) = pushNeg (not isNeg) e
+  pushNeg isNeg (Quantify qua decl p) = Quantify (if isNeg then toggleQuant qua else qua) decl (pushNeg isNeg p)
+  pushNeg True other = NegExp other
+  pushNeg False other = other
+
+  toggleQuant ForAll = Exists
+  toggleQuant Exists = ForAll
+
+  pullQuantifiers (BinOp OpAnd (Quantify qua decl p) q) = Quantify qua decl (pullQuantifiers $ BinOp OpAnd p q)
+  pullQuantifiers (BinOp OpAnd p (Quantify qua decl q)) = Quantify qua decl (pullQuantifiers $ BinOp OpAnd p q)
+
+  pullQuantifiers (BinOp OpOr (Quantify qua decl p) q) = Quantify qua decl (pullQuantifiers $ BinOp OpOr p q)
+  pullQuantifiers (BinOp OpOr p (Quantify qua decl q)) = Quantify qua decl (pullQuantifiers $ BinOp OpOr p q)
+
+  pullQuantifiers x = x
 
 -- * Pretty Printing
 
@@ -222,13 +275,7 @@ instance PP.Pretty PrimitiveType where
 instance PP.Pretty Type where
   pretty (BasicType prim) = PP.pretty prim
   pretty (ArrayType ty) = pptype $ "[]" PP.<+> PP.pretty ty
-{-
-instance PP.Pretty (Var q) where
-  pretty (UVar name) = ppident $ PP.text name
-  pretty (QVar names id ty) = PP.hcat (PP.punctuate PP.dot (prefix ++ [real])) <> "$" <> PP.pretty id where
-    prefix = map PP.pretty $ init names
-    real   = ppident $ PP.pretty $ last names
--}
+
 instance PP.Pretty UVar where
   pretty (UVar name) = ppident $ PP.text name
 
@@ -240,6 +287,10 @@ instance PP.Pretty QVar where
 instance PP.Pretty var => PP.Pretty (Decl var) where
   pretty (Decl var ty) = PP.hsep [PP.pretty var, PP.colon, PP.pretty ty]
 
+instance PP.Pretty Quantifier where
+  pretty ForAll = ppkeyword "forall"
+  pretty Exists = ppkeyword "exists"
+
 instance PP.Pretty Expression where
   pretty = flip go 0 where
     go expr reqPrec = case expr of
@@ -250,7 +301,7 @@ instance PP.Pretty Expression where
       Index arr idx -> PP.pretty arr <> PP.brackets (go idx 0)
       RepBy arr idx e -> PP.pretty arr <> PP.parens (go idx 0 PP.<+> ppkeyword "repby" PP.<+> go e 0)
       NegExp e -> withParens (9 < reqPrec) ("!" <> go e 9)
-      ForAll decl e -> withParens (0 < reqPrec) $ ppkeyword "forall" PP.<+> PP.pretty decl <> PP.colon PP.</> go e 0
+      Quantify qua decl e -> withParens (0 < reqPrec) $ PP.pretty qua PP.<+> PP.pretty decl <> PP.colon PP.</> go e 0
       IfThenElse cond tval fval -> withParens (0 < reqPrec) (go cond 0 PP.<+> "->" PP.<+> go tval 0 PP.<+> "|" PP.<+> go fval 0)
 
 instance PP.Pretty Statement where
