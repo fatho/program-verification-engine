@@ -29,6 +29,9 @@ import           WLP.Interface
 import           Data.Foldable
 import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
+import           Data.Maybe
+import           Data.Map (Map)
+import qualified Data.Map                     as M
 
 import qualified GCL.AST                      as AST
 import           GCL.DSL
@@ -57,6 +60,23 @@ data InvalidInvariantBehavior
   | NeverExecute -- ^ require the loop to not be executed
   deriving (Show, Read, Eq, Ord, Enum, Bounded, Typeable)
 
+data ExternalProgram =
+    Explicit AST.Program
+  | Implicit ProgramSpec
+
+data ProgramSpec = ProgramSpec
+  { preConditions       :: AST.Expression
+  , postConditions      :: AST.Expression
+  , inVar               :: [AST.Decl AST.QVar]
+  , outVar              :: [AST.Decl AST.QVar]
+  } deriving (Typeable)
+
+data AbstractProgram = AbstractProgram
+  { varIn               :: [AST.Decl AST.QVar]
+  , varOut              :: [AST.Decl AST.QVar]
+  , body                :: AST.Statement
+  }
+
 -- | Encapsulates the configuration for the WLP transformer.
 data WlpConfig m = WlpConfig
   { checkInvariantAnnotation :: Bool
@@ -67,6 +87,7 @@ data WlpConfig m = WlpConfig
     -- ^ controls whether the invariant inference should be called for every while-loop, ignoring the annotations
   , invariantInference       :: InvariantInference m
     -- ^ the invariant inference algorithm to be used
+  , procedures               :: Map AST.Name ExternalProgram
   }
   deriving (Typeable)
 
@@ -90,18 +111,47 @@ defaultConfig = WlpConfig
   , invalidInvariantBehavior = NeverExecute
   , alwaysInferInvariant     = False
   , invariantInference       = neverExecuteInference
+  , procedures               = M.empty
   }
+
+-- incProc :: ProgramSpec
+-- incProc = ProgramSpec {
+--     inVar = ["r"]
+--   , outVar = ["r"]
+--   , preConditions = "r" .== 0
+--   , postConditions = "r" .== 1
+-- }
+
+toAbstractP :: ExternalProgram -> AbstractProgram
+toAbstractP (Explicit (AST.Program _ i o b)) = AbstractProgram i o b
+toAbstractP (Implicit ProgramSpec{..}) =
+  let body = AST.Block [AST.Assert preConditions, AST.Assume postConditions]
+  in AbstractProgram inVar outVar body
+
+
+buildConcrete :: AbstractProgram -> [AST.Expression] -> [AST.Expression] -> AST.Statement
+buildConcrete AbstractProgram{..} args res =
+  AST.Var (varIn ++ varOut) $ AST.Block
+    [ AST.Assign (zip (map extractVars varIn) args)
+    , body
+    , AST.Assign (zip (map extractVars varOut) res)]
+  where extractVars (AST.Decl v _) = v
 
 -- | The WLP transformer. It takes a GCL statement and a post-condition and returns the weakest liberal precondition
 -- that ensures that the post-condition holds after executing the statement.
 wlp :: MonadProver m => WlpConfig m -> AST.Statement -> Predicate -> m Predicate
-wlp WlpConfig{..} stmt postcond = go stmt postcond where
+wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
   go AST.Skip q          = return q
-  go (AST.Assign alist) q   = return (AST.subst alist q)
+  go (AST.Assign alist) q = return (AST.subst alist q)
   go (AST.Block stmts) q = foldrM go q stmts
   go (AST.Assert e) q =  return (e /\ q)
   go (AST.Assume e) q = return (e ==> q)
   go (AST.NDet s t) q = (/\) <$> go s q <*> go t q
+  go (AST.Call prog args res) q = do
+    let abstractP = toAbstractP $ fromJust $ M.lookup prog procedures
+    let concreteP = buildConcrete abstractP args res
+    wlp config concreteP q
+
   go (AST.Var decls s) q = do
     inner <- go s q
     -- only introduce quantifier, if the variable being quantified over is referred to inside

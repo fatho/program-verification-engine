@@ -98,6 +98,8 @@ data Statement = Skip
                -- ^ a while loop optionally annotated with an invariant
                | Var [Decl QVar] Statement
                -- ^ a declaration of variables
+               | Call Name [Expression] [Expression]
+
   deriving (Eq, Ord, Show, Data, Typeable)
 
 data Expression = IntLit Int

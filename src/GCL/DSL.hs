@@ -59,6 +59,7 @@ module GCL.DSL
   , skip
   , var
   , while
+  , call
   , ($=)
   , ($$=)
   ) where
@@ -359,6 +360,12 @@ invWhile invariant loopGuard body = do
   cnd <- loopGuard
   bodyStmt <- extractStmt body
   emit $ AST.InvWhile inv cnd bodyStmt
+
+call :: AST.Name -> Code [AST.Expression] -> Code [AST.Expression] -> Code ()
+call prog args rets = do
+  ins <- args
+  outs <- rets
+  emit $ AST.Call prog ins outs
 
 infix 0 $$=
 ($$=) :: [Code AST.Expression] -> [Code AST.Expression] -> Code ()

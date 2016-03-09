@@ -49,7 +49,7 @@ main = do
      liftIO $ prettyPrint 100 prog
      putStrLn ""
      putStrLn ""
-
+     
      let wlp = WLP.wlpProgram WLP.defaultConfig prog
      result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 100) wlp
      {-

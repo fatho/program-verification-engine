@@ -61,3 +61,9 @@ fixpointCheck = program "fixpointCheck" ["x" `as` int] ["y" `as` int ] $ do
   while ("y" .> 0) $ do
     "y" $= "y" - 1
   assert $ "y" .== 0
+--
+-- pCallCheck :: Either GclError Program
+-- pCallCheck = program "pCallCheck" ["x" `as` int] ["r" `as` int] $ do
+--   assume $ "x" .== 0
+--   call "inc" "x" "r"
+--   assert $ "r" .== 1
