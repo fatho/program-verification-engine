@@ -370,10 +370,10 @@ invWhile invariant loopGuard body = do
   bodyStmt <- extractStmt body
   emit $ AST.InvWhile inv cnd bodyStmt
 
-call :: AST.Name -> Code [AST.Expression] -> Code [AST.Expression] -> Code ()
+call :: AST.Name -> [Code AST.Expression] -> [Code AST.Expression] -> Code ()
 call prog args rets = do
-  ins <- args
-  outs <- rets
+  ins <- sequence args
+  outs <- sequence rets
   emit $ AST.Call prog ins outs
 
 infix 0 $$=

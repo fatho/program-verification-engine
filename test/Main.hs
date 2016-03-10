@@ -7,6 +7,9 @@ import qualified WLP.Interface                as Prover
 import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
 
+import GCL.DSL
+import qualified GCL.AST                      as AST
+
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
@@ -14,6 +17,7 @@ import           System.IO
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 import           TestPrograms
+
 
 prettyPrint :: (MonadIO m, PP.Pretty a) => Int -> a -> m ()
 prettyPrint width = liftIO . PP.displayIO stdout . PP.renderSmart 0.6 width . (PP.<> PP.line) . PP.pretty
@@ -41,6 +45,13 @@ interactiveProver = iterM run where
           putStrLn "invalid answer"
           ask q e
 
+myConfig :: WLP.WlpConfig Prover.WLP
+myConfig = WLP.defaultConfig `WLP.withProcedures` [incSpec]
+
+
+incSpec :: Either GclError AST.Program
+incSpec = programFromSpec "inc" ["x" `as` int] ["y" `as` int] true ("y" .== "x" + 1)
+
 main :: IO ()
 main = do
   forM_ allPrograms $ \case
@@ -50,7 +61,7 @@ main = do
      putStrLn ""
      putStrLn ""
 
-     let cfg = (WLP.defaultConfig :: WLP.WlpConfig Prover.WLP) { WLP.invariantInference = WLP.fixpointInference Nothing }
+     let cfg = myConfig { WLP.invariantInference = WLP.fixpointInference Nothing }
          wlp = WLP.wlpProgram cfg prog
      result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 160) wlp
      {-

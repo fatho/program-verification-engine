@@ -341,6 +341,8 @@ instance PP.Pretty Statement where
             PP.<+> ppkeyword "in"
             PP.</> PP.pretty single)
       PP.</> ppkeyword "end"
+  pretty (Call name args rets) =
+      ppkeyword "call" PP.<+> ppident (fromString name) PP.<+> PP.pretty args PP.<+> PP.pretty rets
 
 instance PP.Pretty Program where
   pretty (Program name inargs outargs stmt) = ppident (PP.text name) <> PP.hang 2 (PP.lparen PP.<+> argList PP.<+> PP.rparen) PP.<+> body where
