@@ -138,7 +138,7 @@ wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
           Just pr -> pr
         proc = p `withContext` (args, res)
 
-    wlp config proc q
+    go proc q
 
   go (AST.Var decls s) q = do
     inner <- go s q

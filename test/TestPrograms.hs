@@ -7,7 +7,7 @@ import           GCL.DSL
 -- * Examples
 
 allPrograms :: [Either GclError Program]
-allPrograms = [ d1, d2, pCallCheck ]
+allPrograms = [ d1, d2, swap, minind, minindEx, simple, fixpointCheck, pCallCheck ]
 
 d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
