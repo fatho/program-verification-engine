@@ -1,0 +1,74 @@
+\documentclass[]{scrartcl}
+
+\usepackage{amsmath}
+\usepackage{bussproofs}
+\usepackage{color}
+
+\EnableBpAbbreviations
+
+%opening
+\title{A Program Verification Engine for Imperative Languages}
+\subtitle{Course: Program Verification}
+\author{Giovanni Garufi, Fabian Thorand}
+\date{\today}
+
+\newcommand{\blue}[1]{\textcolor{blue}{#1}}
+
+\newcommand{\HT}[3]{\blue{\{#1\}} #2 \blue{\{#3\}}}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+In this report we present our tool for formally verifying programs written in
+imperative languages. While testing already significantly decreases the chances
+of having bugs in a program, it is often hard or event impossible to write test
+cases that cover every execution path.
+
+One way of making sure a program works as intended is to formally prove that its
+behavior adheres to the specification.
+Such a specification usually consists of a pre- and a post-condition.
+The intention is, that the results of a program satisfy the post-condition,
+given that the inputs to the program fulfil the pre-condition.
+The Hoare calculus provides one mathematical foundation for conducting such
+proofs based on pre- and post-conditions.
+But of course, doing proofs by hand is error-prone and tedious even for
+simple programs.
+
+Ideally, there would be a tool automatically proving properties about programs.
+Unfortunately, it is -- in general -- undecidable to check whether a given
+program (represented as a Turing machine) satisfies a given property, due to the
+Halting problem\footnote{as shown by Rice's theorem}.
+The power of turing machines is usually introduced in programming languages
+by some form of loops or general recursion.
+
+Fortunately, this can be migitated by requiring the programmer to annotate loops
+with invariants, guiding the verification tool in the right direction.
+For some specific cases it might even be possible to automatically infer those
+invariants.
+
+Using a technique called \emph{Predicate Transformers} it is possible to infer
+the precondition required for a program to satisfy its post-condition.
+
+Upon that technique we built our verification engine that we describe in the
+following sections.
+
+\section{Predicate Transformer-Based Verification}
+  \subsection{Basic Statements}
+  \subsection{Loops}
+  \subsection{Arrays}
+  \subsection{Program Calls}
+
+\section{Invariant Inference}
+
+  \subsection{Fixpoint Iteration}
+
+  \subsection{Loop Unrolling}
+
+\section{Related Works}
+
+\section{Conclusion}
+
+\end{document}
