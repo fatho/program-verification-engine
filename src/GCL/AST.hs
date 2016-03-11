@@ -113,13 +113,13 @@ data Quantifier = ForAll | Exists
   deriving (Eq, Ord, Enum, Bounded, Read, Show, Typeable, Data)
 
 data Expression = IntLit Int
+                | BoolLit Bool
                 | Ref QVar
                 | Index Expression Expression
                 | RepBy Expression Expression Expression
                 | NegExp Expression
                 | IfThenElse Expression Expression Expression
                 | BinOp Operator Expression Expression
-                | BoolLit Bool
                 | Quantify Quantifier (Decl QVar) Expression
   deriving (Eq, Ord, Show, Data, Typeable)
 
@@ -176,6 +176,7 @@ makeQuantifiersUnique expr = evalState (go (Map.fromSet id $ freeVariables expr)
     newBody <- go (Map.insert var newVar env) body
     return $ Quantify q (Decl newVar ty) newBody
   go env other = mapMOf plate (go env) other
+
 
 -- | Converts a boolean expression into prenex normal form
 prenex :: Expression -> Expression
@@ -336,13 +337,17 @@ instance PP.Pretty Statement where
             PP.<+> ppkeyword "in"
             PP.<$$> PP.indent 2 (PP.pretty blk)
             PP.<$$> ppkeyword "end"
+
   pretty (Var decls single) =
       PP.hang 2 (ppkeyword "var" PP.<+> PP.align (PP.sep (PP.punctuate PP.comma (map PP.pretty decls)))
             PP.<+> ppkeyword "in"
             PP.</> PP.pretty single)
       PP.</> ppkeyword "end"
-  pretty (Call name args rets) =
-      ppkeyword "call" PP.<+> ppident (fromString name) PP.<+> PP.pretty args PP.<+> PP.pretty rets
+
+  pretty (Call name args rets) = PP.hang 2 (lpretty PP.<+> ":=" PP.</> rpretty) where
+    lpretty = PP.fillSep (PP.punctuate PP.comma (map PP.pretty rets))
+    rpretty = ppident (fromString name) PP.<+> PP.lparen PP.<+> apretty PP.<+> PP.rparen
+    apretty = PP.fillSep (PP.punctuate PP.comma (map PP.pretty args))
 
 instance PP.Pretty Program where
   pretty (Program name inargs outargs stmt) = ppident (PP.text name) <> PP.hang 2 (PP.lparen PP.<+> argList PP.<+> PP.rparen) PP.<+> body where

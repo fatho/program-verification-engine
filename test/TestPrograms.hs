@@ -7,7 +7,7 @@ import           GCL.DSL
 -- * Examples
 
 allPrograms :: [Either GclError Program]
-allPrograms = [ d1, d2, swap, minind, minindEx, simple, fixpointCheck, pCallCheck ]
+allPrograms = [ d1, d2, swap, minind, minindEx, simple, fixpointCheck, callCheck, callCheck2 ]
 
 d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
@@ -95,12 +95,25 @@ fixpointCheck = program "fixpointCheck" ["x" `as` int] ["y" `as` int ] $ do
     "y" $= "y" - 1
   assert $ "y" .== 0
 
-pCallCheck :: Either GclError Program
-pCallCheck = program "pCallCheck" ["x" `as` int] ["r" `as` int] $ do
-  assume $ "x" .== 0
+callCheck2 :: Either GclError Program
+callCheck2 = program "callCheck2" ["x" `as` int] ["r" `as` int] $ do
+  var ["x0" `as` int] $ do
+    "x0" $= "x"
+    call "inc" ["x"] ["x"]
+    call "inc" ["x"] ["x"]
+    "r" $= "x"
+    assert $ "r" .== ("x0" + 2)
+
+
+callCheck :: Either GclError Program
+callCheck = program "callCheck" ["x" `as` int] ["r" `as` int] $ do
   call "inc" ["x"] ["r"]
-  assert $ "r" .== 1
+  call "inc" ["r"] ["r"]
+  assert $ "r" .== ("x" + 2)
 
 inc :: Either GclError Program
 inc = program "inc" ["x" `as` int] ["r" `as` int] $ do
   "r" $= "x" + 1
+
+incSpec :: Either GclError Program
+incSpec = programFromSpec "inc" ["x" `as` int] ["y" `as` int] true ("y" .== "x" + 1)

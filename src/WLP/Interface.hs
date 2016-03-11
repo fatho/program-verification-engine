@@ -16,6 +16,7 @@ module WLP.Interface
 import qualified GCL.AST            as AST
 
 import           Control.Monad.Free
+import           Control.Monad.State
 import           Data.Data
 
 -- | The type of predicates.
@@ -43,6 +44,10 @@ class Monad m => MonadProver m where
 instance MonadProver WLP where
   prove predic = liftF (Prove predic id)
   trace msg  = liftF (Trace msg ())
+
+instance MonadProver m => MonadProver (StateT s m) where
+  prove = lift . prove
+  trace = lift . trace
 
 -- | output mode for interpreters
 data OutputMode

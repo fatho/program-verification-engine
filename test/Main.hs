@@ -7,9 +7,6 @@ import qualified WLP.Interface                as Prover
 import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
 
-import GCL.DSL
-import qualified GCL.AST                      as AST
-
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
@@ -46,11 +43,7 @@ interactiveProver = iterM run where
           ask q e
 
 myConfig :: WLP.WlpConfig Prover.WLP
-myConfig = WLP.defaultConfig `WLP.withProcedures` [inc]
-
-
-incSpec :: Either GclError AST.Program
-incSpec = programFromSpec "inc" ["x" `as` int] ["y" `as` int] true ("y" .== "x" + 1)
+myConfig = WLP.defaultConfig `WLP.withProcedures` [incSpec]
 
 main :: IO ()
 main = do

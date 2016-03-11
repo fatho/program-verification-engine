@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -27,6 +28,7 @@ module WLP.Wlp
 
 import           WLP.Interface
 
+import           Control.Monad.State
 import           Data.Foldable
 import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
@@ -100,32 +102,27 @@ defaultConfig = WlpConfig
 withProcedures :: Monad m => WlpConfig m -> [Either GclError AST.Program] -> WlpConfig m
 withProcedures config mbprocs =
   let
-    procs = map (\x -> case x of
+    procs = map (\case
       Left err -> error err
       Right p@(AST.Program n _ _ _) -> (n, p)) mbprocs
   in
     config {procedures = M.fromList procs}
 
--- incProc :: ProgramSpec
--- incProc = ProgramSpec {
---     inVar = ["r"]
---   , outVar = ["r"]
---   , preConditions = "r" .== 0
---   , postConditions = "r" .== 1
--- }
-
 withContext :: AST.Program -> ([AST.Expression], [AST.Expression]) -> AST.Statement
 withContext (AST.Program _ inVars outVars body) (args,res) =
   AST.Var (inVars ++ outVars) $ AST.Block
-    [ AST.Assign (zip (map extractVars inVars) args)
+    [ AST.Assign (zip (map extractVar inVars) args)
     , body
-    , AST.Assign (zip (map extractVars outVars) res)]
-  where extractVars (AST.Decl v _) = v
+    , AST.Assign (zip (map extractRefs res) (map (AST.Ref . extractVar) outVars))]
+  where
+    extractVar (AST.Decl v _) = v
+    extractRefs (AST.Ref qv) = qv
+    extractRefs _ = error "You can only pass a reference as return type"
 
 -- | The WLP transformer. It takes a GCL statement and a post-condition and returns the weakest liberal precondition
 -- that ensures that the post-condition holds after executing the statement.
 wlp :: MonadProver m => WlpConfig m -> AST.Statement -> Predicate -> m Predicate
-wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
+wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
   go AST.Skip q          = return q
   go (AST.Assign alist) q = return (AST.subst alist q)
   go (AST.Block stmts) q = foldrM go q stmts
@@ -133,11 +130,13 @@ wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
   go (AST.Assume e) q = return (e ==> q)
   go (AST.NDet s t) q = (/\) <$> go s q <*> go t q
   go (AST.Call pname args res) q = do
-    let p = case (M.lookup pname procedures) of
+    let p = case M.lookup pname procedures of
           Nothing -> error $ "Procedure " ++ pname ++ " not found"
           Just pr -> pr
-        proc = p `withContext` (args, res)
-
+    freshP <- makeProgramFresh p
+    let proc = freshP `withContext` (args, res)
+    trace "Generated the following program fragment from external call"
+    trace $ show (PP.pretty $ proc)
     go proc q
 
   go (AST.Var decls s) q = do
@@ -184,17 +183,101 @@ wlp config@WlpConfig{..} stmt postcond = go stmt postcond where
   go (AST.InvWhile iv cnd s) q = inferInv iv cnd s q
 
   inferInv iv cnd s q = do
+    curState <- get
     let args = InvariantInferenceArgs
           { infLoopGuard     = cnd
           , infLoopBody      = s
           , infLoopInvariant = iv
-          , infWlp           = go
+          , infWlp           = \x y -> evalStateT (go x y) curState
           , infPostCondition = q
           }
     trace "invoking invariant inference"
-    invariantInference args
+    lift $ invariantInference args
+
 
   prepare = AST.quantifyFree AST.ForAll . AST.makeQuantifiersUnique
+
+  makeProgramFresh :: MonadState Int m => AST.Program -> m AST.Program
+  makeProgramFresh (AST.Program pname inVars outVars body) = do
+    freshInVars <- mapM mkFreshVar inVars
+    freshOutVars <- mapM mkFreshVar outVars
+    let env = M.fromList $ zip (map extractVar $ inVars ++ outVars) (map extractVar $ freshInVars ++ freshOutVars)
+    freshBody <- goST env body
+    return $ AST.Program pname freshInVars freshOutVars freshBody
+    where
+      extractVar (AST.Decl v _) = v
+      mkFreshVar (AST.Decl (AST.QVar n _ t) ty) = do
+        i <- get
+        put (i+1)
+        return $ (AST.Decl (AST.QVar n i t) ty)
+      goST _   AST.Skip = return AST.Skip
+      goST env (AST.Assert e) = do
+        freshE <- goE env e
+        return $ AST.Assert freshE
+      goST env (AST.Assume e) = do
+        freshE <- goE env e
+        return $ AST.Assume freshE
+      goST env (AST.Assign b) = do
+        newAss <- freshAss b
+        return $ AST.Assign newAss
+        where
+          freshAss [] = return []
+          freshAss ((q, e):rest) = do
+            let newQ = env M.! q
+            newE <- goE env e
+            other <- freshAss rest
+            return $ (newQ, newE):(other)
+      goST env (AST.Block b) = do
+        freshB <- mapM (goST env) b
+        return $ AST.Block freshB
+      goST env (AST.NDet l r) = do
+        freshL <- goST env l
+        freshR <- goST env r
+        return $ AST.NDet freshL freshR
+      goST env (AST.InvWhile mbI g b) = do
+        freshG <- goE env g
+        freshB <- goST env b
+        freshI <- mapM (goE env) mbI
+        return $ AST.InvWhile freshI freshG freshB
+      goST env (AST.Var v s) = do
+        freshVars <- mapM mkFreshVar v
+        let extEnv = M.fromList $ zip (map extractVar v) (map extractVar freshVars)
+        freshB <- goST (env `M.union` extEnv) s
+        return $ AST.Var freshVars freshB
+      goST env (AST.Call n a r) = do
+        freshA <- mapM (goE env) a
+        freshR <- mapM (goE env) r
+        return $ AST.Call n freshA freshR
+
+      goE env (AST.Ref q) = return $ AST.Ref $ env M.! q
+      goE env (AST.Index e1 e2) = do
+        freshE1 <- goE env e1
+        freshE2 <- goE env e2
+        return $ AST.Index freshE1 freshE2
+      goE env (AST.RepBy e1 e2 e3) = do
+        freshE1 <- goE env e1
+        freshE2 <- goE env e2
+        freshE3 <- goE env e3
+        return $ AST.RepBy freshE1 freshE2 freshE3
+      goE env (AST.NegExp e) = do
+        freshE <- goE env e
+        return $ AST.NegExp freshE
+      goE env (AST.IfThenElse i t e) = do
+        freshI <- goE env i
+        freshT <- goE env t
+        freshE <- goE env e
+        return $ AST.IfThenElse freshI freshT freshE
+      goE env (AST.BinOp op e1 e2) = do
+        freshE1 <- goE env e1
+        freshE2 <- goE env e2
+        return $ AST.BinOp op freshE1 freshE2
+      goE env (AST.Quantify q dV e) = do
+        freshVar <- mkFreshVar dV
+        freshE <- goE (M.insert (extractVar dV) (extractVar freshVar) env) e
+        return $ AST.Quantify q freshVar freshE
+      goE _ other = return other
+
+
 
 -- | Returns for every loop an invariant that ensures that the loop is never executed and
 -- the post-condition already holds
