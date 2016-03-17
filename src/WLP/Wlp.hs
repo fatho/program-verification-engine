@@ -1,9 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-| Contains the implementation of the WLP predicate transformer.
@@ -30,10 +31,10 @@ import           WLP.Interface
 
 import           Control.Monad.State
 import           Data.Foldable
+import           Data.Map                     (Map)
+import qualified Data.Map                     as M
 import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import           Data.Map (Map)
-import qualified Data.Map                     as M
 
 import qualified GCL.AST                      as AST
 import           GCL.DSL
@@ -130,9 +131,9 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
   go (AST.Assume e) q = return (e ==> q)
   go (AST.NDet s t) q = (/\) <$> go s q <*> go t q
   go (AST.Call pname args res) q = do
-    let p = case M.lookup pname procedures of
-          Nothing -> error $ "Procedure " ++ pname ++ " not found"
-          Just pr -> pr
+    p <- case M.lookup pname procedures of
+           Nothing -> fail $ "Procedure " ++ pname ++ " not found"
+           Just pr -> return pr
     freshP <- makeProgramFresh p
     let proc = freshP `withContext` (args, res)
     trace "Generated the following program fragment from external call"
