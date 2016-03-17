@@ -111,16 +111,14 @@ withProcedures config mbprocs =
   in
     config {procedures = M.fromList procs}
 
-withContext :: AST.Program -> ([AST.Expression], [AST.Expression]) -> AST.Statement
+withContext :: AST.Program -> ([AST.Expression], [AST.QVar]) -> AST.Statement
 withContext (AST.Program _ inVars outVars body) (args,res) =
   AST.Var (inVars ++ outVars) $ AST.Block
     [ AST.Assign (zip (map extractVar inVars) args)
     , body
-    , AST.Assign (zip (map extractRefs res) (map (AST.Ref . extractVar) outVars))]
+    , AST.Assign (zip res (map (AST.Ref . extractVar) outVars))]
   where
     extractVar (AST.Decl v _) = v
-    extractRefs (AST.Ref qv) = qv
-    extractRefs _ = error "You can only pass a reference as return type"
 
 -- | The WLP transformer. It takes a GCL statement and a post-condition and returns the weakest liberal precondition
 -- that ensures that the post-condition holds after executing the statement.
@@ -248,10 +246,14 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
         return $ AST.Var freshVars freshB
       goST env (AST.Call n a r) = do
         freshA <- mapM (goE env) a
-        freshR <- mapM (goE env) r
+        freshR <- mapM (goVar env) r
         return $ AST.Call n freshA freshR
 
-      goE env (AST.Ref q) = return $ AST.Ref $ env M.! q
+      goVar env qv = case M.lookup qv env of
+        Nothing -> fail $ "variable " ++ show qv ++ " not declared"
+        Just replace -> return replace
+
+      goE env (AST.Ref q) = AST.Ref <$> goVar env q
       goE env (AST.Index e1 e2) = do
         freshE1 <- goE env e1
         freshE2 <- goE env e2

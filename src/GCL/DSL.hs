@@ -321,6 +321,10 @@ infix 4 ./=
 instance IsString (Code AST.Expression) where
   fromString = ref . fromString
 
+-- | Allows the usage of strings directly as QVars in our AST.
+instance IsString (Code AST.QVar) where
+  fromString = lookupVar . fromString
+
 -- | Allows the usage of the DSL AST in arithmetic expressions.
 instance Num (Code AST.Expression) where
   (+) = operator AST.OpPlus
@@ -370,7 +374,7 @@ invWhile invariant loopGuard body = do
   bodyStmt <- extractStmt body
   emit $ AST.InvWhile inv cnd bodyStmt
 
-call :: AST.Name -> [Code AST.Expression] -> [Code AST.Expression] -> Code ()
+call :: AST.Name -> [Code AST.Expression] -> [Code AST.QVar] -> Code ()
 call prog args rets = do
   ins <- sequence args
   outs <- sequence rets
