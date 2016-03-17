@@ -49,3 +49,16 @@ executable pv-test
   hs-source-dirs:      pv-test
   default-language:    Haskell2010
 
+test-suite spec
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Main.hs
+  other-modules:       Spec
+  ghc-options:         -Wall
+  build-depends:       base >=4.8 && <4.9
+                     , hspec
+                     , ansi-wl-pprint
+                     , program-verification-engine
+                     , free
+                     , sbv
+                     , transformers
