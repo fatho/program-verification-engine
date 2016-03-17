@@ -1,11 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-| Contains the implementation of the WLP predicate transformer.
 -}
@@ -40,7 +42,7 @@ import qualified GCL.AST                      as AST
 import           GCL.DSL
 
 -- | the type of an invariant inference algorithm
-type InvariantInference m = InvariantInferenceArgs m -> m Predicate
+type InvariantInference m = forall s. InvariantInferenceArgs (StateT s m) -> StateT s m Predicate
 
 -- | Encapsulates the arguments passed to the invariant inference.
 data InvariantInferenceArgs m = InvariantInferenceArgs
@@ -184,16 +186,15 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
   go (AST.InvWhile iv cnd s) q = inferInv iv cnd s q
 
   inferInv iv cnd s q = do
-    curState <- get
     let args = InvariantInferenceArgs
           { infLoopGuard     = cnd
           , infLoopBody      = s
           , infLoopInvariant = iv
-          , infWlp           = \x y -> evalStateT (go x y) curState
+          , infWlp           = go
           , infPostCondition = q
           }
     trace "invoking invariant inference"
-    lift $ invariantInference args
+    invariantInference args
 
 
   prepare = AST.quantifyFree AST.ForAll . AST.makeQuantifiersUnique
