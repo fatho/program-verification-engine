@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import qualified Data.SBV                     as SBV
 import qualified WLP.Interface                as Prover
 import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
@@ -10,6 +9,8 @@ import qualified WLP.Wlp                      as WLP
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
+import qualified Data.Map                     as Map
+import qualified Data.SBV                     as SBV
 import           System.IO
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
@@ -23,14 +24,16 @@ interpretTree :: PP.Pretty a => Prover.WLP a -> PP.Doc
 interpretTree = iter run . fmap PP.pretty where
   run (Prover.Prove predi cont) =
     "?" PP.<+> PP.pretty predi
-      PP.<$$> PP.indent 2 ("false:" PP.<+> PP.align (cont False))
-      PP.<$$> PP.indent 2 ("true: " PP.<+> PP.align (cont True))
+      PP.<$$> PP.indent 2 ("false:" PP.<+> PP.align (cont $ Just Map.empty))
+      PP.<$$> PP.indent 2 ("true: " PP.<+> PP.align (cont Nothing))
   run (Prover.Trace msg cont) = "!" PP.<+> PP.string msg PP.<$$> cont
 
 -- | A prover backend that asks for help via stdin/stdout.
 interactiveProver :: Prover.WLP a -> IO a
 interactiveProver = iterM run where
-  run (Prover.Prove predi cont) = ask "valid?" predi >>= cont
+  run (Prover.Prove predi cont) = ask "valid?" predi >>= \case
+    True -> cont Nothing
+    False -> cont (Just Map.empty)
   run (Prover.Trace msg cont) = putStrLn msg >> cont
   ask q e = do
     putStr ": " >> liftIO (prettyPrint 100 e) >> putStrLn ""

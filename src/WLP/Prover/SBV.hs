@@ -6,20 +6,20 @@
 module WLP.Prover.SBV
   ( -- * Interface
     interpretSBV
-  , parInterpretSBV
   ) where
 
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
-import           Control.Concurrent.Async
-import           Data.List              (intercalate)
+import           Data.List              (intercalate, sortOn)
 import qualified Data.Map.Strict        as Map
 import qualified Data.SBV.Bridge.Z3     as Z3
 import           Data.SBV.Dynamic
 
 import qualified GCL.AST                as GCL
 import           WLP.Interface
+
+import           Debug.Trace
 
 -- | Generates an SBV name for a 'QVar'.
 qvarString :: GCL.QVar -> String
@@ -58,9 +58,42 @@ requireVal symV = do
   Val v <- symV
   return v
 
+-- | Converts a formula to prenex normal form and separates it into a list of quantified variables and
+-- a quantifier-free expression
+separateQuantifiers :: GCL.Expression -> ([(GCL.Quantifier, GCL.QVar)], GCL.Expression)
+separateQuantifiers expr = go [] (GCL.prenex expr) where
+  go vars expr = case expr of
+    GCL.Quantify quantifier (GCL.Decl var varTy) ex -> go ((quantifier, var) : vars) ex
+    other -> (vars, other)
+
 -- | Builds an SBV theorem from a (boolean) GCL expression. Type correctness is not checked.
-buildTheorem :: GCL.Expression -> Symbolic Sym
-buildTheorem = go Map.empty where
+buildTheorem :: [(GCL.Quantifier, GCL.QVar)] -> GCL.Expression -> Symbolic Sym
+buildTheorem vars expr = build where
+  build = do
+    varMap <- mapM (uncurry declVar) sortedVars
+    go (Map.fromList varMap) expr
+
+  sortedVars = sortOn fst vars
+
+  declVar quantifier var@(GCL.QVar _ _ varTy) =
+    case varTy of
+      GCL.BasicType ty -> do
+        let kind = kindOfType ty
+            name = qvarString var
+            sbvQ = case quantifier of
+                     GCL.ForAll -> ALL
+                     GCL.Exists -> EX
+        svar <- svMkSymVar (Just sbvQ) kind (Just name)
+        return (var, Val svar)
+      GCL.ArrayType ty -> do
+        let kind = kindOfType ty
+            --initVal = case ty of
+            --  GCL.BoolType -> svFalse
+            --  GCL.IntType -> svInteger KUnbounded 0
+        when (quantifier == GCL.Exists) $ fail "existential array quantification not supported by backend"
+        sarr <- newSArr (KUnbounded, kind) (const $ qvarString var) Nothing
+        return (var, Arr sarr)
+
   go env expr = case expr of
     GCL.IntLit i -> return $ Val $ svInteger KUnbounded (toInteger i)
     GCL.BoolLit b -> return $ Val $ svBool b
@@ -83,21 +116,8 @@ buildTheorem = go Map.empty where
     GCL.NegExp ex -> do
       Val nVal <- go env ex
       return $ Val $ svNot nVal
-    GCL.Quantify quantifier (GCL.Decl var varTy) ex -> do
-      case varTy of
-        GCL.BasicType ty -> do
-          let kind = kindOfType ty
-              name = qvarString var
-              sbvQ = case quantifier of
-                       GCL.ForAll -> ALL
-                       GCL.Exists -> EX
-          svar <- svMkSymVar (Just sbvQ) kind (Just name)
-          go (Map.insert var (Val svar) env) ex
-        GCL.ArrayType ty -> do
-          let kind = kindOfType ty
-          when (quantifier == GCL.Exists) $ fail "existential array quantification not supported by backend"
-          sarr <- newSArr (KUnbounded, kind) (const $ qvarString var) Nothing
-          go (Map.insert var (Arr sarr) env) ex
+    GCL.Quantify quantifier (GCL.Decl var varTy) ex ->
+      fail $ "error: nested quantifiers should have been moved to front by conversion to prenex normal form"
     GCL.IfThenElse cond tval fval -> do
       Val c <- go env cond
       Val t <- go env tval
@@ -113,16 +133,21 @@ interpretSBV :: MonadIO m
              -> m a
 interpretSBV smt outputMode tracePredicate = iterM run where
   run (Prove predi cont) = do
-    let prenexPred = GCL.prenex $ predi
-        thm = requireVal $ buildTheorem prenexPred
+    let (vars,quantFree) = separateQuantifiers $ GCL.prenex $ predi
+        thm = requireVal $ buildTheorem vars quantFree
     runIfTrace $ do
       liftIO $ putStrLn "Input formula:"
       tracePredicate predi
-      liftIO $ putStrLn "Prenex normal form:"
-      tracePredicate prenexPred
+      liftIO $ do
+        putStrLn "Quantifier free form:"
+        print vars
+      tracePredicate quantFree
     result <- liftIO $ proveWith smt thm
     runIfTrace (liftIO $ print result)
-    cont (not $ Z3.modelExists result)
+    --cont (not $ Z3.modelExists result)
+    if Z3.modelExists result
+      then cont $ Just $ fmap show $ Z3.getModelDictionary result
+      else cont Nothing
 
   run (Trace msg cont) = do
     runIfTrace $ liftIO $ putStrLn msg
@@ -131,25 +156,3 @@ interpretSBV smt outputMode tracePredicate = iterM run where
   runIfTrace :: Monad m => m () -> m ()
   runIfTrace = when (outputMode == TraceMode)
 
-
-parInterpretSBV :: SMTConfig -> WLP a -> IO a
-parInterpretSBV smt = iterM run where
-  run (Prove predi cont) = do
-    let thm = requireVal $ buildTheorem predi
-
-    tCont <- async $ cont True
-    fCont <- async $ cont False
-
-    withAsync (proveWith smt thm) $ \result -> do
-      res <- wait result
-      pickCont (not $ Z3.modelExists res) tCont fCont
-
-  run (Trace _ cont) = cont
-
-  pickCont :: Bool -> Async a -> Async a -> IO a
-  pickCont True a b = do
-    cancel b
-    wait a
-  pickCont False a b = do
-    cancel a
-    wait b

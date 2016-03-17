@@ -35,6 +35,7 @@ import           Control.Monad.State
 import           Data.Foldable
 import           Data.Map                     (Map)
 import qualified Data.Map                     as M
+import           Data.Maybe
 import           Data.Typeable
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
@@ -129,7 +130,7 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
   go (AST.Block stmts) q = foldrM go q stmts
   go (AST.Assert e) q =  return (e /\ q)
   go (AST.Assume e) q = return (e ==> q)
-  go (AST.NDet s t) q = (/\) <$> go s q <*> go t q
+  go (AST.NDet s t) q = (\x y -> AST.makeQuantifiersUnique $ x /\ y) <$> go s q <*> go t q
   go (AST.Call pname args res) q = do
     p <- case M.lookup pname procedures of
            Nothing -> fail $ "Procedure " ++ pname ++ " not found"
@@ -334,10 +335,11 @@ finiteUnroll baseCase numUnroll loopGuard body = go numUnroll where
 
 -- | The result from computing the WLP of a program
 data WlpResult = WlpResult
-  { wlpResultPrecondition :: Predicate
+  { wlpResultPrecondition   :: Predicate
     -- ^ the weakest liberal precondition that has been computed
-  , wlpResultVerified     :: Bool
+  , wlpResultVerified       :: Bool
     -- ^ tells whether the precondition could be verified or not
+  , wlpResultCounterExample :: Maybe CounterExample
   }
 
 instance PP.Pretty WlpResult where
@@ -352,5 +354,5 @@ wlpProgram :: MonadProver m => WlpConfig m -> AST.Program -> m WlpResult
 wlpProgram cfg (AST.Program _ i o body) = do
   precond <- wlp cfg (AST.Var (i ++ o) body) true
   trace "proving final precondition"
-  valid <- prove precond
-  return $ WlpResult precond valid
+  ce <- prove' precond
+  return $ WlpResult precond (isNothing ce) ce

@@ -32,7 +32,6 @@ library
                      , transformers
                      , sbv
                      , free
-                     , async
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -42,6 +41,7 @@ executable pv-test
   ghc-options:         -Wall
   build-depends:       base >=4.8 && <4.9
                      , ansi-wl-pprint
+                     , containers
                      , program-verification-engine
                      , free
                      , sbv
@@ -58,6 +58,7 @@ test-suite spec
   build-depends:       base >=4.8 && <4.9
                      , hspec
                      , ansi-wl-pprint
+                     , containers
                      , program-verification-engine
                      , free
                      , sbv
