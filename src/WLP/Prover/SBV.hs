@@ -1,22 +1,26 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecursiveDo     #-}
 {-| Defines an interpreter for the 'WLP.Interface.WLP' free monad using "Data.SBV" as a backend for theorem proving.
 -}
 module WLP.Prover.SBV
   ( -- * Interface
     interpretSBV
+  , parInterpretSBV
   ) where
 
+import           Control.Concurrent.Async
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
-import           Data.List              (intercalate, sortOn)
-import qualified Data.Map.Strict        as Map
-import qualified Data.SBV.Bridge.Z3     as Z3
+import           Data.List                (intercalate, sortOn)
+import qualified Data.Map.Strict          as Map
+import           Data.Maybe
+import qualified Data.SBV.Bridge.Z3       as Z3
 import           Data.SBV.Dynamic
 
-import qualified GCL.AST                as GCL
+import qualified GCL.AST                  as GCL
 import           WLP.Interface
 
 import           Debug.Trace
@@ -156,3 +160,24 @@ interpretSBV smt outputMode tracePredicate = iterM run where
   runIfTrace :: Monad m => m () -> m ()
   runIfTrace = when (outputMode == TraceMode)
 
+parInterpretSBV :: SMTConfig -> WLP a -> IO a
+parInterpretSBV smt = iterM run where
+  run (Prove predi cont) = mdo
+    let (vars,quantFree) = separateQuantifiers $ GCL.prenex $ predi
+        thm = requireVal $ buildTheorem vars quantFree
+
+    tCont <- async $ liftIO $ cont Nothing
+    fCont <- async $ liftIO $ cont (Just $ fmap show $ Z3.getModelDictionary res)
+
+    res <- liftIO $ proveWith smt thm
+    pickCont (not $ Z3.modelExists res) tCont fCont
+
+  run (Trace _ cont) = cont
+
+  pickCont :: Bool -> Async a -> Async a -> IO a
+  pickCont True a b = do
+    cancel b
+    wait a
+  pickCont False a b = do
+    cancel a
+    wait b

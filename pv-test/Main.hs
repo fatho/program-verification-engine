@@ -60,6 +60,7 @@ main = do
      let cfg = myConfig { WLP.invariantInference = WLP.fixpointInference Nothing }
          wlp = WLP.wlpProgram cfg prog
      result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 160) wlp
+     --result <- SBV.parInterpretSBV SBV.z3 wlp
      {-
      let result = WLP.wlpProgram prog
      -}
