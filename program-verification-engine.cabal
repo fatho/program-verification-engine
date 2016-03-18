@@ -64,3 +64,4 @@ test-suite spec
                      , free
                      , sbv
                      , transformers
+  default-language:    Haskell2010
