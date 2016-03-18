@@ -14,7 +14,8 @@ import           Control.Concurrent.Async
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
-import           Data.List                (intercalate, sortOn)
+import           Data.Function            (on)
+import           Data.List                (intercalate, sortBy)
 import qualified Data.Map.Strict          as Map
 import           Data.Maybe
 import qualified Data.SBV.Bridge.Z3       as Z3
@@ -73,12 +74,20 @@ separateQuantifiers expr = go [] (GCL.prenex expr) where
 -- | Builds an SBV theorem from a (boolean) GCL expression. Type correctness is not checked.
 buildTheorem :: [(GCL.Quantifier, GCL.QVar)] -> GCL.Expression -> Symbolic Sym
 buildTheorem vars expr = build where
+  -- build the SBV expression required to prove our expression
   build = do
+    -- first, declare all variables
     varMap <- mapM (uncurry declVar) sortedVars
     go (Map.fromList varMap) expr
 
-  sortedVars = sortOn fst vars
+  -- we put forall quantifiers first. they become exists-quantifiers when translated to a SAT call,
+  -- and we want those at the outermost level in order for SBV to be able to extract a model.
+  forallFirst GCL.ForAll GCL.Exists = LT
+  forallFirst GCL.Exists GCL.ForAll = GT
+  forallFirst _ _ = EQ
+  sortedVars = sortBy (forallFirst `on` fst) vars
 
+  -- declare a quantified variable for use in SBV
   declVar quantifier var@(GCL.QVar _ _ varTy) =
     case varTy of
       GCL.BasicType ty -> do
@@ -160,6 +169,11 @@ interpretSBV smt outputMode tracePredicate = iterM run where
   runIfTrace :: Monad m => m () -> m ()
   runIfTrace = when (outputMode == TraceMode)
 
+-- | Parallel interpreter for WLP computations.
+-- When arriving at a branching point depending on a proof it will spawn threads to
+-- continue the computation for both possible outcomes, cancelling one as soon as the proof has been completed.
+--
+-- Trying to access the result before it is available will result in blocking.
 parInterpretSBV :: SMTConfig -> WLP a -> IO a
 parInterpretSBV smt = iterM run where
   run (Prove predi cont) = mdo
@@ -167,6 +181,8 @@ parInterpretSBV smt = iterM run where
         thm = requireVal $ buildTheorem vars quantFree
 
     tCont <- async $ liftIO $ cont Nothing
+    -- pass the result to the sub-computation before it is actually computed.
+    -- this works thanks to laziness
     fCont <- async $ liftIO $ cont (Just $ fmap show $ Z3.getModelDictionary res)
 
     res <- liftIO $ proveWith smt thm

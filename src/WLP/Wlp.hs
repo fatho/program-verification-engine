@@ -77,6 +77,7 @@ data WlpConfig m = WlpConfig
   , invariantInference       :: InvariantInference m
     -- ^ the invariant inference algorithm to be used
   , procedures               :: Map AST.Name AST.Program
+    -- ^ the environment of available procedures for program calls
   }
   deriving (Typeable)
 
@@ -103,6 +104,7 @@ defaultConfig = WlpConfig
   , procedures               = M.empty
   }
 
+-- | Extend a WLP configuration with procedures
 withProcedures :: Monad m => WlpConfig m -> [Either GclError AST.Program] -> WlpConfig m
 withProcedures config mbprocs =
   let
@@ -110,10 +112,10 @@ withProcedures config mbprocs =
       Left err -> error err
       Right p@(AST.Program n _ _ _) -> (n, p)) mbprocs
   in
-    config {procedures = M.fromList procs}
+    config {procedures = M.union (M.fromList procs) (procedures config) }
 
-withContext :: AST.Program -> ([AST.Expression], [AST.QVar]) -> AST.Statement
-withContext (AST.Program _ inVars outVars body) (args,res) =
+embedProgram :: AST.Program -> [AST.Expression] -> [AST.QVar] -> AST.Statement
+embedProgram (AST.Program _ inVars outVars body) args res =
   AST.Var (inVars ++ outVars) $ AST.Block
     [ AST.Assign (zip (map extractVar inVars) args)
     , body
@@ -136,7 +138,7 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
            Nothing -> fail $ "Procedure " ++ pname ++ " not found"
            Just pr -> return pr
     freshP <- makeProgramFresh p
-    let proc = freshP `withContext` (args, res)
+    let proc = embedProgram freshP args res
     trace "Generated the following program fragment from external call"
     trace $ show (PP.pretty $ proc)
     go proc q

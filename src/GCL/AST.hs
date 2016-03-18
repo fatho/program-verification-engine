@@ -181,11 +181,13 @@ makeQuantifiersUnique expr = evalState (go (Map.fromSet id $ freeVariables expr)
 -- | Converts a boolean expression into prenex normal form
 prenex :: Expression -> Expression
 prenex = transform pullQuantifiers . pushNeg False . elimArrows where
+  -- get rid of "arrow" operators, to reduce the number of cases needed to cover later on
   elimArrows = transform $ \case
     BinOp OpImplies p q -> BinOp OpOr (NegExp p) q
     BinOp OpIff p q -> BinOp OpOr (BinOp OpAnd p q) (BinOp OpAnd (NegExp p) (NegExp q))
+    IfThenElse cnd p q -> BinOp OpOr (BinOp OpAnd cnd p) (BinOp OpAnd (NegExp cnd) q)
     x -> x
-
+  -- push all negations inside as far as possible
   pushNeg isNeg (BinOp OpAnd p q) = BinOp (if isNeg then OpOr else OpAnd) (pushNeg isNeg p) (pushNeg isNeg q)
   pushNeg isNeg (BinOp OpOr p q) = BinOp (if isNeg then OpAnd else OpOr) (pushNeg isNeg p) (pushNeg isNeg q)
   pushNeg isNeg (NegExp e) = pushNeg (not isNeg) e
@@ -193,16 +195,23 @@ prenex = transform pullQuantifiers . pushNeg False . elimArrows where
   pushNeg True other = NegExp other
   pushNeg False other = other
 
+  -- switches quantifiers in a negation
   toggleQuant ForAll = Exists
   toggleQuant Exists = ForAll
 
-  pullQuantifiers (BinOp OpAnd (Quantify qua decl p) q) = Quantify qua decl (pullQuantifiers $ BinOp OpAnd p q)
-  pullQuantifiers (BinOp OpAnd p (Quantify qua decl q)) = Quantify qua decl (pullQuantifiers $ BinOp OpAnd p q)
-
-  pullQuantifiers (BinOp OpOr (Quantify qua decl p) q) = Quantify qua decl (pullQuantifiers $ BinOp OpOr p q)
-  pullQuantifiers (BinOp OpOr p (Quantify qua decl q)) = Quantify qua decl (pullQuantifiers $ BinOp OpOr p q)
+  -- pull quantifiers up one level
+  pullQuantifiers (BinOp OpAnd (Quantify qua decl p) q) = ifNotFree decl q $ Quantify qua decl (pullQuantifiers $ BinOp OpAnd p q)
+  pullQuantifiers (BinOp OpAnd p (Quantify qua decl q)) = ifNotFree decl p $ Quantify qua decl (pullQuantifiers $ BinOp OpAnd p q)
+  pullQuantifiers (BinOp OpOr (Quantify qua decl p) q) = ifNotFree decl q $ Quantify qua decl (pullQuantifiers $ BinOp OpOr p q)
+  pullQuantifiers (BinOp OpOr p (Quantify qua decl q)) = ifNotFree decl p $ Quantify qua decl (pullQuantifiers $ BinOp OpOr p q)
 
   pullQuantifiers x = x
+
+  ifNotFree decl q cont
+    | declVar decl `Set.notMember` freeVariables q = cont
+    | otherwise                                    = error $ show (PP.pretty (declVar decl)) ++ " is free in " ++ show (PP.pretty q)
+
+  declVar (Decl v _) = v
 
 -- * Pretty Printing
 
