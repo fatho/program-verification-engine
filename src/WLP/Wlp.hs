@@ -9,6 +9,8 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveAnyClass             #-}
 {-| Contains the implementation of the WLP predicate transformer.
 -}
 module WLP.Wlp
@@ -32,6 +34,8 @@ module WLP.Wlp
 import           WLP.Interface
 
 import           Control.Monad.State
+import           GHC.Generics (Generic)
+import           Control.DeepSeq
 import           Data.Foldable
 import           Data.Map                     (Map)
 import qualified Data.Map                     as M
@@ -321,7 +325,7 @@ unrollInference baseCase numUnroll InvariantInferenceArgs{..} = infWlp unrolledL
     UnrollAssert -> AST.Assert cond
     UnrollAssume -> AST.Assume cond
 
--- | Unrolls a given number of iterations of a  while loop and uses the supplied base case.
+-- | Unrolls a given number of iterations of a  while loops and uses the supplied base case.
 finiteUnroll :: (Predicate -> AST.Statement) -- ^ the function generating the base case. it receives the negation of the loop guard as argument
             -> Int -- ^ the number of iterations to unroll
             -> Predicate -- ^ the loop guard
@@ -342,7 +346,7 @@ data WlpResult = WlpResult
   , wlpResultVerified       :: Bool
     -- ^ tells whether the precondition could be verified or not
   , wlpResultCounterExample :: Maybe CounterExample
-  }
+  } deriving (Generic, NFData)
 
 instance PP.Pretty WlpResult where
   pretty WlpResult{..}
