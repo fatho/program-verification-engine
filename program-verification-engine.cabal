@@ -23,8 +23,8 @@ library
                      , WLP.Wlp
   -- other-modules:
   -- other-extensions:
-  ghc-options:         -Wall
-  build-depends:       base >=4.8 && <4.9
+  ghc-options:         -Wall -threaded -O2
+  build-depends:       base
                      , ansi-wl-pprint
                      , containers
                      , lens
@@ -33,6 +33,7 @@ library
                      , sbv
                      , free
                      , async
+                     , deepseq
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -40,7 +41,7 @@ executable pv-test
   main-is:             Main.hs
   other-modules:       TestPrograms
   ghc-options:         -Wall
-  build-depends:       base >=4.8 && <4.9
+  build-depends:       base
                      , ansi-wl-pprint
                      , containers
                      , program-verification-engine
@@ -56,7 +57,7 @@ test-suite spec
   main-is:             Main.hs
   other-modules:       Spec
   ghc-options:         -Wall
-  build-depends:       base >=4.8 && <4.9
+  build-depends:       base
                      , hspec
                      , ansi-wl-pprint
                      , containers
@@ -65,3 +66,15 @@ test-suite spec
                      , sbv
                      , transformers
   default-language:    Haskell2010
+
+benchmark bench
+  type:                exitcode-stdio-1.0
+  default-language:    Haskell2010
+  hs-source-dirs:      bench
+  main-is:             Bench.hs
+  build-depends:       base
+                     , criterion
+                     , program-verification-engine
+                     , sbv
+                     , free
+  ghc-options:       -Wall

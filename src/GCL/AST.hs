@@ -8,6 +8,8 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveAnyClass            #-}
 {- | Contains the AST of the Guarded Common Language and some related utility functions.
 -}
 module GCL.AST
@@ -35,6 +37,8 @@ module GCL.AST
   where
 import           Data.String
 
+import           GHC.Generics (Generic)
+import           Control.DeepSeq
 import           Control.Lens.Plated
 import           Control.Lens.Traversal
 import           Control.Monad.State
@@ -53,11 +57,11 @@ type Name = String
 
 -- | Available types in our verification engine.
 data PrimitiveType = BoolType | IntType
-  deriving (Eq, Ord, Show, Read, Data, Typeable)
+  deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData)
 
 -- | Available types in our verification engine.
 data Type = BasicType PrimitiveType | ArrayType PrimitiveType
-  deriving (Eq, Ord, Show, Read, Data, Typeable)
+  deriving (Eq, Ord, Show, Read, Data, Typeable, Generic, NFData)
 
 -- | An unqualified reference to a variable, meaning depends on scope.
 data UVar = UVar Name
@@ -65,7 +69,7 @@ data UVar = UVar Name
 
 -- | Fully qualified and unique reference to a variable.
 data QVar = QVar [Name] Int Type
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Eq, Ord, Show, Data, Typeable, Generic, NFData)
 
 -- | Binary operators in GCL
 data Operator = OpLEQ
@@ -80,7 +84,7 @@ data Operator = OpLEQ
               | OpIff
               | OpAnd
               | OpOr
-  deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable)
+  deriving (Eq, Ord, Show, Read, Enum, Bounded, Data, Typeable, Generic, NFData)
 
 instance IsString UVar where
   fromString = UVar
@@ -89,7 +93,7 @@ data Program = Program Name [Decl QVar] [Decl QVar] Statement
   deriving (Eq, Ord, Show, Data, Typeable)
 
 data Decl var = Decl var Type
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Eq, Ord, Show, Data, Typeable, Generic, NFData)
 
 data Statement = Skip
                -- ^ the skip statement does nothing
@@ -114,7 +118,7 @@ data Statement = Skip
 
 -- | The two supported quantifiers.
 data Quantifier = ForAll | Exists
-  deriving (Eq, Ord, Enum, Bounded, Read, Show, Typeable, Data)
+  deriving (Eq, Ord, Enum, Bounded, Read, Show, Typeable, Data, Generic, NFData)
 
 -- | GCL Expression AST
 data Expression = IntLit Integer
@@ -126,7 +130,7 @@ data Expression = IntLit Integer
                 | IfThenElse Expression Expression Expression
                 | BinOp Operator Expression Expression
                 | Quantify Quantifier (Decl QVar) Expression
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Eq, Ord, Show, Data, Typeable, Generic, NFData)
 
 instance Plated Expression where
   plate = uniplate
