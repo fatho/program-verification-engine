@@ -17,14 +17,11 @@ import           Control.Monad.IO.Class
 import           Data.Function            (on)
 import           Data.List                (intercalate, sortBy)
 import qualified Data.Map.Strict          as Map
-import           Data.Maybe
 import qualified Data.SBV.Bridge.Z3       as Z3
 import           Data.SBV.Dynamic
 
 import qualified GCL.AST                  as GCL
 import           WLP.Interface
-
-import           Debug.Trace
 
 -- | Generates an SBV name for a 'QVar'.
 qvarString :: GCL.QVar -> String
@@ -67,9 +64,8 @@ requireVal symV = do
 -- a quantifier-free expression
 separateQuantifiers :: GCL.Expression -> ([(GCL.Quantifier, GCL.QVar)], GCL.Expression)
 separateQuantifiers expr = go [] (GCL.prenex expr) where
-  go vars expr = case expr of
-    GCL.Quantify quantifier (GCL.Decl var varTy) ex -> go ((quantifier, var) : vars) ex
-    other -> (vars, other)
+  go vars (GCL.Quantify quantifier (GCL.Decl var _) ex) = go ((quantifier, var) : vars) ex
+  go vars other = (vars, other)
 
 -- | Builds an SBV theorem from a (boolean) GCL expression. Type correctness is not checked.
 buildTheorem :: [(GCL.Quantifier, GCL.QVar)] -> GCL.Expression -> Symbolic Sym
@@ -107,7 +103,7 @@ buildTheorem vars expr = build where
         sarr <- newSArr (KUnbounded, kind) (const $ qvarString var) Nothing
         return (var, Arr sarr)
 
-  go env expr = case expr of
+  go env e = case e of
     GCL.IntLit i -> return $ Val $ svInteger KUnbounded (toInteger i)
     GCL.BoolLit b -> return $ Val $ svBool b
     GCL.Ref var -> case Map.lookup var env of
@@ -129,7 +125,7 @@ buildTheorem vars expr = build where
     GCL.NegExp ex -> do
       Val nVal <- go env ex
       return $ Val $ svNot nVal
-    GCL.Quantify quantifier (GCL.Decl var varTy) ex ->
+    GCL.Quantify {} ->
       fail $ "error: nested quantifiers should have been moved to front by conversion to prenex normal form"
     GCL.IfThenElse cond tval fval -> do
       Val c <- go env cond

@@ -211,7 +211,7 @@ lookupVar uv@(AST.UVar name) = views declarations (Map.lookup uv) >>= \case
 
 class ExprAST ast where
   type ExpVar ast :: *
-  litI   :: Int -> ast
+  litI   :: Integer -> ast
   litB   :: Bool -> ast
   ref    :: ExpVar ast -> ast
   operator :: AST.Operator -> ast -> ast -> ast
@@ -332,7 +332,7 @@ instance Num (Code AST.Expression) where
   (*) = operator AST.OpTimes
   abs e = liftM abs e
   signum e = liftM signum e
-  fromInteger = litI . fromInteger
+  fromInteger = litI
 
 -- * Statement DSL
 {-

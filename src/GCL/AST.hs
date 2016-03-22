@@ -8,7 +8,7 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE StandaloneDeriving        #-}
-{- | Contains the AST of the Guarded Common Language.
+{- | Contains the AST of the Guarded Common Language and some related utility functions.
 -}
 module GCL.AST
   ( -- * AST types
@@ -35,7 +35,8 @@ module GCL.AST
   where
 import           Data.String
 
-import           Control.Lens
+import           Control.Lens.Plated
+import           Control.Lens.Traversal
 import           Control.Monad.State
 import           Data.Data
 import           Data.Data.Lens
@@ -66,6 +67,7 @@ data UVar = UVar Name
 data QVar = QVar [Name] Int Type
   deriving (Eq, Ord, Show, Data, Typeable)
 
+-- | Binary operators in GCL
 data Operator = OpLEQ
               | OpEQ
               | OpGEQ
@@ -106,13 +108,16 @@ data Statement = Skip
                | Var [Decl QVar] Statement
                -- ^ a declaration of variables
                | Call Name [Expression] [QVar]
+               -- ^ program call with list of argument expressions and list of return variables
 
   deriving (Eq, Ord, Show, Data, Typeable)
 
+-- | The two supported quantifiers.
 data Quantifier = ForAll | Exists
   deriving (Eq, Ord, Enum, Bounded, Read, Show, Typeable, Data)
 
-data Expression = IntLit Int
+-- | GCL Expression AST
+data Expression = IntLit Integer
                 | BoolLit Bool
                 | Ref QVar
                 | Index Expression Expression
@@ -136,7 +141,7 @@ instance Num Expression where
   (*) = BinOp OpTimes
   abs e = IfThenElse (BinOp OpLT e 0) (negate e) e
   signum e = IfThenElse (BinOp OpLT e 0) (-1) (IfThenElse (BinOp OpEQ e 0) 0 1)
-  fromInteger = IntLit . fromInteger
+  fromInteger = IntLit
 
 -- * Useful helper functions
 
