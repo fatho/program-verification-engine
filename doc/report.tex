@@ -3,8 +3,18 @@
 \usepackage{amsmath}
 \usepackage{bussproofs}
 \usepackage{color}
+\usepackage{listings}
 
 \EnableBpAbbreviations
+
+\newcommand{\WHILE}[2]{\ensuremath{\mathbf{while}\;#1\;\mathbf{do}\;\{#2\}}}
+\newcommand{\IF}[3]{\ensuremath{\mathbf{if}\;#1\;\mathbf{then}\;\{#2\}\;\mathbf{else}\;\{#3\}}}
+\newcommand{\SKIP}{\ensuremath{\mathbf{skip};}}
+\newcommand{\ASSUME}[1]{\ensuremath{\mathbf{assume}\;#1;}}
+\newcommand{\ASSERT}[1]{\ensuremath{\mathbf{assert}\;#1;}}
+\newcommand{\WLP}[2]{\ensuremath{\mathbf{wlp}\;#1\;#2}}
+\newcommand{\UNROLLSQ}[3]{\ensuremath{[\mathit{while}]^{#1}(#2, #3)}}
+\newcommand{\UNROLLDI}[3]{\ensuremath{\langle\mathit{while}\rangle^{#1}(#2, #3)}}
 
 %opening
 \title{A Program Verification Engine for Imperative Languages}
@@ -55,19 +65,66 @@ the precondition required for a program to satisfy its post-condition.
 Upon that technique we built our verification engine that we describe in the
 following sections.
 
-\section{Predicate Transformer-Based Verification}
-  \subsection{Basic Statements}
-  \subsection{Loops}
-  \subsection{Arrays}
-  \subsection{Program Calls}
+\section{Implementing Predicate Transformer-Based Verification}
+
+\subsection{Basic Statements}
+\subsection{Loops}
+\subsection{Arrays}
+\subsection{Program Calls}
 
 \section{Invariant Inference}
 
-  \subsection{Fixpoint Iteration}
+In the case where the user has not annotated the invariant of while-loops, 
+it might still be possible to infer the invariant using fixpoint-iteration
+or finite unrolling.
 
-  \subsection{Loop Unrolling}
+\subsection{Fixpoint Iteration}
 
-\section{Related Works}
+When we have a loop \lstinline|while g do S;|, it is equivalent to 
+\begin{lstlisting}
+if g then { S; while g do S; }
+     else skip;
+\end{lstlisting}
+effectively unrolling the loop once.
+
+If $W$ is \textbf{wlp} of that loop, we have $W = \WLP{(\WHILE{g}{S})}{Q}$ as well as 
+$W = (g \land \WLP{S}{(\WLP{(\WHILE{g}{S})}{Q})}) \lor (\neg g \land Q)$ according to the unrolling above.
+Therefore, we can conclude that $W = (g \land \WLP{S}{W}) \lor (\neg g \land Q)$.
+
+We can find the greatest fixpoint of this equation by iterating, starting from the weakest invariant \emph{true},
+following from the \emph{Knaster-Tarski} fixpoint-theorem.
+\begin{align}
+  \label{eq:fp:base} W_0 &= \mathit{true} \\
+  \label{eq:fp:iter} W_{i+1} &= (g \land W_i) \lor (\neg g \land Q) 
+\end{align} 
+
+If a fixpoint exists, there is an $i$ for which $W_{i+1} = W_i$ holds. 
+We implemented the iteration according to equations \ref{eq:fp:base} and \ref{eq:fp:iter}.
+After each iteration, we invoke the backend-prover to check whether $W_{i+1} \iff W_i$ holds.
+In that case we have found the fixpoint $W_i$ and return it to the \textbf{wlp} function as
+invariant.
+We additionally implemented an optional limit to the number of iterations.
+If that limit is exceeded without finding an invariant, we return a precondition that requires
+that the loop will never be executed and the post-condition already holds. 
+
+\subsection{Loop Unrolling}
+
+As an alternative to fixpoint-iteration we can also unroll a loop a finite number of times and
+compute the \textbf{wlp} of the unrolling. The last iteration then either asserts that the
+loop guard will not hold, or just assume that it doesn't hold anymore. 
+Formally, those unrollings, named  are defined as follows.
+\begin{align}
+\UNROLLSQ{0\phantom{+1}}{g}{S} &= \ASSERT{\neg g} \\
+\UNROLLSQ{k+1}{g}{S} &= \IF{g}{S; \UNROLLSQ{k}{g}{S}}{\SKIP}
+\end{align}
+
+\begin{align}
+\UNROLLDI{0\phantom{+1}}{g}{S} &= \ASSUME{\neg g} \\
+\UNROLLDI{k+1}{g}{S} &= \IF{g}{S; \UNROLLDI{k}{g}{S}}{\SKIP}
+\end{align}
+
+Our implementation first computes (lazily) the unrolled loop and then applies
+the \textbf{wlp} transformer to the unrolling. 
 
 \section{Conclusion}
 
