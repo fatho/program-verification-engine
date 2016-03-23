@@ -65,7 +65,28 @@ the precondition required for a program to satisfy its post-condition.
 Upon that technique we built our verification engine that we describe in the
 following sections.
 
-\section{Implementing Predicate Transformer-Based Verification}
+\section{A DSL for Guarded Common Language} 
+
+\section{Implementing Predicate Transformer}
+
+\subsection{A Free Monad}
+
+\subsection{Backend Solver}
+
+\subsection{Handling Quantifiers}
+
+Our GCL DSL allows arbitrary nesting of universal and existential quantification,
+but the solver library we use requires all quantified variables to be defined in
+the beginning.
+Fortunately, for every formula in classical logic there is an equivalent formula
+in prenex normal form, where all quantifiers occur in the beginning.
+The conversion to prenex normal form requires that every quantified variable is
+unique to avoid accidental capturing when pulling the quantifiers outside.
+Additionally, all negations have to be pushed inwards, swapping universal and
+existential quantification on the go.
+Skolemization is then perfomed by the prover backend.
+
+\section{Components}
 
 \subsection{Basic Statements}
 \subsection{Loops}
