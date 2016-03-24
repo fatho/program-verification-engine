@@ -1,7 +1,6 @@
-Title:  Program Verification Engine
-Author: Giovanni Garufi
-        Fabian Thorand
-Date:   March 25, 2016
+#  Program Verification Engine
+
+By Giovanni Garufi and Fabian Thorand
 
 # Build Instructions
 

@@ -97,6 +97,24 @@ program calls. The following sections describe our implementation in greater det
 
 \section{Monadic DSL for the Guarded Common Language} 
 
+Our abstract syntax tree representing programs consists of three levels.
+The root node stores the name of the program, the input and output arguments and a body statement.
+The statement and expression trees closely follow the grammar outlined in the assignment description,
+with one notable difference. Instead of sequencing statements pairwisely, we have an explicit \emph{block}
+statement wrapping a list of statements.
+Our expression AST is untyped, therefore we require the user to only construct type correct programs.
+We have an unqualified and a qualified representation of variables. 
+
+The DSL makes uses of the unqualified names (identifiers as they are supplied by the user) and performs
+name resolution. The AST produced by the DSL then uses the qualified names, which contain a namespace 
+(currently only the program name) and a unique number besides the unqualified name.
+
+In order to facilitate writing programs in the DSL we allow Haskell string literals to be directly
+used as variables by means of the \emph{OverloadedStrings} GHC extension and make it possible to
+directly use integer literals and common mathematical operations by instantiating the \emph{Num} type class. 
+
+% TODO: maybe listing of the AST types
+
 % describe our monadic DSL (and also the resulting AST)
 
 \section{Implementing Predicate Transformer}
