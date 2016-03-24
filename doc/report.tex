@@ -17,6 +17,28 @@
 \newcommand{\WLP}[2]{\ensuremath{\mathbf{wlp}\;#1\;#2}}
 \newcommand{\UNROLLSQ}[3]{\ensuremath{[\mathit{while}]^{#1}(#2, #3)}}
 \newcommand{\UNROLLDI}[3]{\ensuremath{\langle\mathit{while}\rangle^{#1}(#2, #3)}}
+\lstset{
+  frame=none,
+  xleftmargin=2pt,
+  stepnumber=1,
+  numbers=left,
+  numbersep=5pt,
+  numberstyle=\ttfamily\tiny\color[gray]{0.3},
+  belowcaptionskip=\bigskipamount,
+  captionpos=b,
+  escapeinside={*'}{'*},
+  language=haskell,
+  tabsize=2,
+  emphstyle={\bf},
+  commentstyle=\it,
+  stringstyle=\mdseries\rmfamily,
+  showspaces=false,
+  keywordstyle=\bfseries\rmfamily,
+  columns=flexible,
+  basicstyle=\small\sffamily,
+  showstringspaces=false,
+  morecomment=[l]\%,
+}
 
 %opening
 \title{A Program Verification Engine for Imperative Languages}
@@ -103,19 +125,38 @@ The statement and expression trees closely follow the grammar outlined in the as
 with one notable difference. Instead of sequencing statements pairwisely, we have an explicit \emph{block}
 statement wrapping a list of statements.
 Our expression AST is untyped, therefore we require the user to only construct type correct programs.
-We have an unqualified and a qualified representation of variables. 
+Variables in the AST are qualified, besides the literal name they also consist of a unqiue identifier.
+At certain points in our code we assume that all variables in the supplied AST are indeed unique.  
 
-The DSL makes uses of the unqualified names (identifiers as they are supplied by the user) and performs
-name resolution. The AST produced by the DSL then uses the qualified names, which contain a namespace 
-(currently only the program name) and a unique number besides the unqualified name.
+In order to facilitate dealing with variables we also provide a monadic DSL for constructing programs.
+The DSL makes use of unqualified names, but performs name resolution and fails if undeclared variables
+are used. All variable declarations in the resulting AST are unique. 
 
-In order to facilitate writing programs in the DSL we allow Haskell string literals to be directly
-used as variables by means of the \emph{OverloadedStrings} GHC extension and make it possible to
-directly use integer literals and common mathematical operations by instantiating the \emph{Num} type class. 
+We also make use of some language features to facilitate writing programs in the DSL.
+It is possible to use Haskell string literals to be directly as variables by means of the 
+\emph{OverloadedStrings} GHC extension and to directly use integer literals and common mathematical
+operations by making use the \emph{Num} type class.
+
+It also takes care of some implementation details. If-expressions are actually implemented in terms of
+non-deterministic branching in GCL. Furthermore, assignments to arrays like
+\lstinline|a[i] := e| are translated to the corresponding \lstinline|a := a(i repby e)|.
+Listing \ref{fig:prog:example} shows a program swapping two values in an array.
+
+\begin{lstlisting}[caption=A program swapping the values at two indices in an array, label=fig:prog:example]
+p = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` array int] $ do
+  var ["tmp" `as` int, "a_old" `as` array int] $ do
+    "a_old" $= "a"
+    "tmp"     $= "a" ! "i"
+    "a" ! "i" $= "a" ! "j"
+    "a" ! "j" $= "tmp"
+    "a'"      $= "a"
+    assert $ "a'" ! "i" .== "a_old" ! "j" /\ "a'" ! "j" .== "a_old" ! "i"
+\end{lstlisting}
 
 % TODO: maybe listing of the AST types
 
-% describe our monadic DSL (and also the resulting AST)
+% TODO: should we add an appendix with all syntactic elements?
+
 
 \section{Implementing Predicate Transformer}
 % TODO: describe general implementation architecture
