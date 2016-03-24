@@ -4,6 +4,8 @@
 \usepackage{bussproofs}
 \usepackage{color}
 \usepackage{listings}
+\usepackage{hyperref}
+\usepackage{url}
 
 \EnableBpAbbreviations
 
@@ -30,7 +32,11 @@
 
 \maketitle
 
+\tableofcontents
+
+%==================================================================================================
 \section{Introduction}
+%==================================================================================================
 
 In this report we present our tool for formally verifying programs written in
 imperative languages. While testing already significantly decreases the chances
@@ -65,35 +71,52 @@ the precondition required for a program to satisfy its post-condition.
 Upon that technique we built our verification engine that we describe in the
 following sections.
 
-\section{A DSL for Guarded Common Language} 
+%==================================================================================================
+\section{Project Structure}
+%==================================================================================================
+
+We implemented our project in the Haskell programming language making use of
+Monads to achieve abstraction.
+For invoking the solver we rely on the \texttt{sbv}\footnote{\url{https://hackage.haskell.org/package/sbv}}
+library available on Hackage.
+It provides a common interface to several solver backends via the SMT-LIB v2 standard,
+although some features are only implemented in some solvers.
+For that reason, we only use the Microsoft Z3 backend for now.
+
+SBV provides a typed and untyped (w.r.t. expressions) interface to the prover.
+As our internal AST representation is untyped and we rely on the type correctness of
+the user-provided programs anyway, we use the untyped API.
+
+Our core implementation is devided in four parts, the AST, the monadic DSL, the WLP transformer
+and the adapter to the prover backend. 
+Furthermore, we have implemented a test suite asserting the expected results for the examples
+in the project assignment description.
+
+On top of the basic requirements, we also support array assignments, invariant inference and
+program calls. The following sections describe our implementation in greater detail.
+
+\section{Monadic DSL for the Guarded Common Language} 
+
+% describe our monadic DSL (and also the resulting AST)
 
 \section{Implementing Predicate Transformer}
-
-\subsection{A Free Monad}
-
-\subsection{Backend Solver}
-
-\subsection{Handling Quantifiers}
-
-Our GCL DSL allows arbitrary nesting of universal and existential quantification,
-but the solver library we use requires all quantified variables to be defined in
-the beginning.
-Fortunately, for every formula in classical logic there is an equivalent formula
-in prenex normal form, where all quantifiers occur in the beginning.
-The conversion to prenex normal form requires that every quantified variable is
-unique to avoid accidental capturing when pulling the quantifiers outside.
-Additionally, all negations have to be pushed inwards, swapping universal and
-existential quantification on the go.
-Skolemization is then perfomed by the prover backend.
-
-\section{Components}
+% TODO: describe general implementation architecture
 
 \subsection{Basic Statements}
-\subsection{Loops}
-\subsection{Arrays}
-\subsection{Program Calls}
+% TODO: not much to say I think, pretty straight forward
 
+\subsection{Loops}
+% TODO: describe handling/checking of invariants, code excerpt here
+
+\subsection{Arrays}
+% TODO: refer to array theory of Z3
+
+\subsection{Program Calls}
+% TODO: describe environment lookup and inlining 
+
+%==================================================================================================
 \section{Invariant Inference}
+%==================================================================================================
 
 In the case where the user has not annotated the invariant of while-loops, 
 it might still be possible to infer the invariant using fixpoint-iteration
@@ -128,6 +151,8 @@ We additionally implemented an optional limit to the number of iterations.
 If that limit is exceeded without finding an invariant, we return a precondition that requires
 that the loop will never be executed and the post-condition already holds. 
 
+% TODO: anything else about fixpoints?
+
 \subsection{Loop Unrolling}
 
 As an alternative to fixpoint-iteration we can also unroll a loop a finite number of times and
@@ -147,6 +172,43 @@ Formally, those unrollings, named  are defined as follows.
 Our implementation first computes (lazily) the unrolled loop and then applies
 the \textbf{wlp} transformer to the unrolling. 
 
+% TODO: anything else about loop unrolling?
+
+%==================================================================================================
+\section{Solver Backend}
+%==================================================================================================
+
+% TODO: general interoduction to the backend
+
+\subsection{Free Monad Interface}
+
+% TODO: describe free monad
+
+\subsection{Handling Quantifiers}
+
+Our GCL DSL allows arbitrary nesting of universal and existential quantification,
+but the solver library we use requires all quantified variables to be defined in
+the beginning.
+Fortunately, for every formula in classical logic there is an equivalent formula
+in prenex normal form, where all quantifiers occur in the beginning.
+The conversion to prenex normal form requires that every quantified variable is
+unique to avoid accidental capturing when pulling the quantifiers outside.
+Additionally, all negations have to be pushed inwards, swapping universal and
+existential quantification on the go.
+Skolemization is then perfomed by the prover backend.
+An additional benefit from the conversion to prenex normal form is, that it allows
+us to return a model for all existential quantifications in a SAT proof, as only 
+the values of the outermost existentials are returned by the library.
+
+% TODO: describe remaining conversion to SBV (straightforward)
+
+%==================================================================================================
 \section{Conclusion}
+%==================================================================================================
+
+Using Haskell allowed us to write the WLP implementation in a succinct declarative
+style, closely following the underlying formal definitions.
+
+% TODO: other conlusions
 
 \end{document}
