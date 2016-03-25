@@ -46,7 +46,7 @@ interactiveProver = iterM run where
           ask q e
 
 myConfig :: WLP.WlpConfig Prover.WLP
-myConfig = WLP.defaultConfig `WLP.withProcedures` [incSpec, swap]
+myConfig = WLP.defaultConfig `WLP.withProcedures` [incSpec, swapSpec, minindSpec]
 
 main :: IO ()
 main = do
