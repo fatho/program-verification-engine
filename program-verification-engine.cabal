@@ -79,4 +79,4 @@ benchmark bench
                      , program-verification-engine
                      , sbv
                      , free
-  ghc-options:       -Wall
+  ghc-options:       -Wall -threaded

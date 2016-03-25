@@ -110,14 +110,14 @@ As our internal AST representation is untyped and we rely on the type correctnes
 the user-provided programs anyway, we use the untyped API.
 
 Our core implementation is devided in four parts, the AST, the monadic DSL, the WLP transformer
-and the adapter to the prover backend. 
+and the adapter to the prover backend.
 Furthermore, we have implemented a test suite asserting the expected results for the examples
 in the project assignment description.
 
 On top of the basic requirements, we also support array assignments, invariant inference and
 program calls. The following sections describe our implementation in greater detail.
 
-\section{Monadic DSL for the Guarded Common Language} 
+\section{Monadic DSL for the Guarded Common Language}
 
 Our abstract syntax tree representing programs consists of three levels.
 The root node stores the name of the program, the input and output arguments and a body statement.
@@ -126,14 +126,14 @@ with one notable difference. Instead of sequencing statements pairwisely, we hav
 statement wrapping a list of statements.
 Our expression AST is untyped, therefore we require the user to only construct type correct programs.
 Variables in the AST are qualified, besides the literal name they also consist of a unqiue identifier.
-At certain points in our code we assume that all variables in the supplied AST are indeed unique.  
+At certain points in our code we assume that all variables in the supplied AST are indeed unique.
 
 In order to facilitate dealing with variables we also provide a monadic DSL for constructing programs.
 The DSL makes use of unqualified names, but performs name resolution and fails if undeclared variables
-are used. All variable declarations in the resulting AST are unique. 
+are used. All variable declarations in the resulting AST are unique.
 
 We also make use of some language features to facilitate writing programs in the DSL.
-It is possible to use Haskell string literals to be directly as variables by means of the 
+It is possible to use Haskell string literals to be directly as variables by means of the
 \emph{OverloadedStrings} GHC extension and to directly use integer literals and common mathematical
 operations by making use the \emph{Num} type class.
 
@@ -160,37 +160,103 @@ p = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` a
 
 \section{Implementing Predicate Transformer}
 % TODO: describe general implementation architecture
+The WLP transformer is implemented in a custom MonadProver monad we defined.
+The MonadProver provides two basic actions: prove and trace, that respectively
+either prove or provied a counterexample to a supplied predicate, allowing the
+wlp to unfold, and allows us trace debug statements during the whole operation.
+
+As we will see in later sections the there are different ways a wlp computation
+could be carried on; these differences are abstracted over by a configuration
+that must be provided to the transformer allowing different extensions to the
+WLP behaviour.
+
+The transformer operates under the partial correctness interpretation, as such
+termination is assumed to guaranteed.
 
 \subsection{Basic Statements}
 % TODO: not much to say I think, pretty straight forward
+Dealing with most of the basic statements in the GCL language turns out to
+be pretty straightforward. The implementation deals with these basic statements
+exactly as presented in the lectures.
+As a matter of fact: since we used the same datatype both for expressions in GCL
+and the predicates built by the wlp, we managed to reuse the combinators defined
+in the DSL to specify the predicates in the WLP. The effect of this on the code
+is that it writes out almost exactly as in the equations presented in the lectures.
 
 \subsection{Loops}
 % TODO: describe handling/checking of invariants, code excerpt here
+In the case the user provides his loops with an annotated invariant the first
+thing that must be done is to verify the validity of said invariant.
+This can be stated as
+\begin{align}
+  I \land \neg g \Rightarrow Q \\
+  I \land g \Rightarrow \WLP S I
+\end{align}
+The SBV solver has to be invoked to verify that these conditions hold, and that
+the invariant supplied by the user is in fact a valid invariant.
+If the invariant turns out to be invalid, it can still work out if the loop
+is never entered. This gives us the following forumula for the wlp of an annotated
+loop
 
+% TODO: Insert inv formula
+\begin{align}
+  \WLP (inv I while g do S) Q &=
+    \begin{cases}
+      I, if the provided invariant is valid\\
+      \neg g \land q, otherwise
+    \end{cases}
+\end{align}
+We will see in a subsequent section how to deal with unannotated loops
 \subsection{Arrays}
 % TODO: refer to array theory of Z3
+To deal with array assignment we introduce the following translation
+
+\begin{align}
+  a[i] := e \equiv a := a (i repby e)
+\end{align}
+
+Where the newly introduced expression represents an array which is identical to
+\emph{a}, except at position \emph{i} where it has value \emph{e}.
+
+This allows us to define the corrisponding wlp as if it were a normal assignment
+
+\begin{align}
+  \WLP (a[i] := e) Q &= Q[a(i repby e) / a]
+\end{align}
 
 \subsection{Program Calls}
-% TODO: describe environment lookup and inlining 
-
+% TODO: describe environment lookup and inlining
+We can extend the wlp the verify programs which contain calls to other programs.
+We can think of a program call like a statement with two associated sets:
+the input and the output parameters.
+External programs can be specified in two different ways: by a complete program or
+just by a specification of the preconditions and postconditions associated with
+the call.
+In the latter case we provide a function that builds the program body by asserting
+its pre-conditions and assuming the post-conditions.
+The environment is extended with associations between program names and the
+tuple of input/output parameters and program body that completely specify a program
+When a program call is made the body is simply inlined at call site taking care
+of assigning input and output parameters correctly. Once this program fragment is
+built the wlp can simply procede on that.
 %==================================================================================================
 \section{Invariant Inference}
 %==================================================================================================
 
-In the case where the user has not annotated the invariant of while-loops, 
+In the case where the user has not annotated the invariant of while-loops,
 it might still be possible to infer the invariant using fixpoint-iteration
 or finite unrolling.
 
 \subsection{Fixpoint Iteration}
 
-When we have a loop \lstinline|while g do S;|, it is equivalent to 
+When we have a loop \lstinline|while g do S;|, it is equivalent to
 \begin{lstlisting}
 if g then { S; while g do S; }
      else skip;
 \end{lstlisting}
 effectively unrolling the loop once.
 
-If $W$ is \textbf{wlp} of that loop, we have $W = \WLP{(\WHILE{g}{S})}{Q}$ as well as 
+If $W$ is \textbf{wlp} of that loop, we have $W = \WLP{(\WHILE{g}{S})}{Q}$ as well as
 $W = (g \land \WLP{S}{(\WLP{(\WHILE{g}{S})}{Q})}) \lor (\neg g \land Q)$ according to the unrolling above.
 Therefore, we can conclude that $W = (g \land \WLP{S}{W}) \lor (\neg g \land Q)$.
 
@@ -198,17 +264,17 @@ We can find the greatest fixpoint of this equation by iterating, starting from t
 following from the \emph{Knaster-Tarski} fixpoint-theorem.
 \begin{align}
   \label{eq:fp:base} W_0 &= \mathit{true} \\
-  \label{eq:fp:iter} W_{i+1} &= (g \land W_i) \lor (\neg g \land Q) 
-\end{align} 
+  \label{eq:fp:iter} W_{i+1} &= (g \land W_i) \lor (\neg g \land Q)
+\end{align}
 
-If a fixpoint exists, there is an $i$ for which $W_{i+1} = W_i$ holds. 
+If a fixpoint exists, there is an $i$ for which $W_{i+1} = W_i$ holds.
 We implemented the iteration according to equations \ref{eq:fp:base} and \ref{eq:fp:iter}.
 After each iteration, we invoke the backend-prover to check whether $W_{i+1} \iff W_i$ holds.
 In that case we have found the fixpoint $W_i$ and return it to the \textbf{wlp} function as
 invariant.
 We additionally implemented an optional limit to the number of iterations.
 If that limit is exceeded without finding an invariant, we return a precondition that requires
-that the loop will never be executed and the post-condition already holds. 
+that the loop will never be executed and the post-condition already holds.
 
 % TODO: anything else about fixpoints?
 
@@ -216,7 +282,7 @@ that the loop will never be executed and the post-condition already holds.
 
 As an alternative to fixpoint-iteration we can also unroll a loop a finite number of times and
 compute the \textbf{wlp} of the unrolling. The last iteration then either asserts that the
-loop guard will not hold, or just assume that it doesn't hold anymore. 
+loop guard will not hold, or just assume that it doesn't hold anymore.
 Formally, those unrollings, named  are defined as follows.
 \begin{align}
 \UNROLLSQ{0\phantom{+1}}{g}{S} &= \ASSERT{\neg g} \\
@@ -229,7 +295,7 @@ Formally, those unrollings, named  are defined as follows.
 \end{align}
 
 Our implementation first computes (lazily) the unrolled loop and then applies
-the \textbf{wlp} transformer to the unrolling. 
+the \textbf{wlp} transformer to the unrolling.
 
 % TODO: anything else about loop unrolling?
 
@@ -241,6 +307,16 @@ the \textbf{wlp} transformer to the unrolling.
 
 \subsection{Free Monad Interface}
 
+The WLP transformer is implemented as a free monad over WLP computations.
+This allows us to specify different interpreters for the same abstract WLP tree.
+We ended up implementing a handful of different interpreters along the ``main''
+one, which relies on the SBV interface to carry out the proofs in predicate logic.
+Other interpreters that were implemented allowed us to: pretty-print a WLP tree,
+allowing us to inspect the different branching points and in general providing
+a very useful debugging tool, an interactive interpreter which asks the user
+to carry out the requested proofs and a speculative interpreter which, at branching
+points, immediately proceeds resolving the wlp with all possible outcomes and
+at a later point prunes the excessive branches when a proof is provided.
 % TODO: describe free monad
 
 \subsection{Handling Quantifiers}
@@ -256,7 +332,7 @@ Additionally, all negations have to be pushed inwards, swapping universal and
 existential quantification on the go.
 Skolemization is then perfomed by the prover backend.
 An additional benefit from the conversion to prenex normal form is, that it allows
-us to return a model for all existential quantifications in a SAT proof, as only 
+us to return a model for all existential quantifications in a SAT proof, as only
 the values of the outermost existentials are returned by the library.
 
 % TODO: describe remaining conversion to SBV (straightforward)
