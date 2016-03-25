@@ -10,6 +10,7 @@
 \EnableBpAbbreviations
 
 \newcommand{\WHILE}[2]{\ensuremath{\mathbf{while}\;#1\;\mathbf{do}\;\{#2\}}}
+\newcommand{\IWHILE}[3]{\ensuremath{\mathbf{inv}\;#1\;\mathbf{while}\;#2\;\mathbf{do}\;\{#3\}}}
 \newcommand{\IF}[3]{\ensuremath{\mathbf{if}\;#1\;\mathbf{then}\;\{#2\}\;\mathbf{else}\;\{#3\}}}
 \newcommand{\SKIP}{\ensuremath{\mathbf{skip};}}
 \newcommand{\ASSUME}[1]{\ensuremath{\mathbf{assume}\;#1;}}
@@ -184,6 +185,17 @@ and the predicates built by the wlp, we managed to reuse the combinators defined
 in the DSL to specify the predicates in the WLP. The effect of this on the code
 is that it writes out almost exactly as in the equations presented in the lectures.
 
+Listing \ref{lst:wlp:basic} shows two simple cases from our WLP implementation.
+As we need to be able to run the prover on the fly, we run the WLP in a monadic context.
+In the case for a block of statements we simply monadicly fold the WLP over all statements.
+The implementation for assertions also follows closely the formal specification of the
+WLP transformer. 
+
+\begin{lstlisting}[caption=WLP implementation example, label=lst:wlp:basic]
+  go (AST.Block stmts) q = foldrM go q stmts
+  go (AST.Assert e) q =  return (e /\ q)
+\end{lstlisting}
+
 \subsection{Loops}
 % TODO: describe handling/checking of invariants, code excerpt here
 In the case the user provides his loops with an annotated invariant the first
@@ -201,13 +213,47 @@ loop
 
 % TODO: Insert inv formula
 \begin{align}
-  \WLP{(inv I while g do S)}{Q} &=
+  \WLP{(\IWHILE{I}{g}{S})}{Q} &=
     \begin{cases}
       I, \qquad  \mathrm{if \; the \; provided \; invariant \; is \; valid}\\
       \neg g \land q, \mathrm{otherwise}
     \end{cases}
 \end{align}
-We will see in a subsequent section how to deal with unannotated loops
+We will see in a subsequent section how to deal with unannotated loops.
+
+Listing \ref{lst:wlp:loop} show an excerpt from the WLP function implementing the aforementioned case.
+The behavior in the case where the invariant is invalid is configurable. We can either try to prove
+that the loop is never entered, or we try to infer a correct invariant.
+The invariant check itself can be turned off as well, then the invariant is always assumed correct.
+That might be useful when the correctness proof is not feasible with the backend prover.
+
+\begin{lstlisting}[caption=WLP loop case, label=lst:wlp:loop]
+go (AST.InvWhile (Just iv) cnd s) q
+  | not alwaysInferInvariant && checkInvariantAnnotation = do
+      preInv <- go s iv
+      let preserveInv = prepare $ iv /\ cnd ==> preInv
+          postcnd     = prepare $ iv /\ neg cnd ==> q  
+      trace "trying to prove invariant is preserved"
+      preserved <- prove preserveInv
+      trace "trying to prove post condition"
+      postValid <- prove postcnd
+      if preserved && postValid
+        then do
+          trace "invariant valid: choosing invariant as precondition"
+          return iv
+        else case invalidInvariantBehavior of
+          NeverExecute -> do
+            trace "invariant invalid: requiring that loop is never executed"
+            return (neg cnd /\ q)
+          Infer -> do
+            trace "invariant invalid: trying to infer an invariant"
+            inferInv (Just iv) cnd s q
+  | not alwaysInferInvariant && not checkInvariantAnnotation = do
+      trace "assuming user-supplied invariant is correct"
+      return iv
+\end{lstlisting}
+
+
 \subsection{Arrays}
 % TODO: refer to array theory of Z3
 To deal with array assignment we introduce the following translation
