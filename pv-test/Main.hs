@@ -14,7 +14,7 @@ import qualified Data.SBV                     as SBV
 import           System.IO
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
-import           TestPrograms
+import           WLP.Examples.TestPrograms
 
 
 prettyPrint :: (MonadIO m, PP.Pretty a) => Int -> a -> m ()

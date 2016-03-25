@@ -6,12 +6,12 @@ import qualified GCL.DSL                      as GCL
 import qualified WLP.Interface                as Prover
 import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
+import qualified WLP.Examples.TestPrograms    as Progs
 
 
 import qualified Data.SBV                     as SBV
 import           Criterion.Main
 
-import qualified TestPrograms                 as Progs
 
 
 main :: IO ()
@@ -38,10 +38,10 @@ myConfig :: WLP.WlpConfig Prover.WLP
 myConfig = WLP.defaultConfig `WLP.withProcedures` [Progs.incSpec, Progs.minindSpec, Progs.swapSpec]
 
 fixConfig :: WLP.WlpConfig Prover.WLP
-fixConfig = myConfig { WLP.invariantInference = WLP.fixpointInference (Just 30) }
+fixConfig = myConfig { WLP.invariantInference = WLP.fixpointInference (Just 20) }
 
 unrollConfig :: WLP.WlpConfig Prover.WLP
-unrollConfig = myConfig { WLP.invariantInference = WLP.unrollInference WLP.UnrollAssert 40}
+unrollConfig = myConfig { WLP.invariantInference = WLP.unrollInference WLP.UnrollAssert 30}
 
 seqVerifyWith :: Either GCL.GclError GCL.Program -> WLP.WlpConfig Prover.WLP -> IO WLP.WlpResult
 seqVerifyWith (Left err) _ = error $ "could not parse program: " ++ err

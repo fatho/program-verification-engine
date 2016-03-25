@@ -5,6 +5,7 @@ import qualified GCL.DSL                      as GCL
 import qualified WLP.Interface                as Prover
 import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
+import qualified WLP.Examples.TestPrograms    as Progs
 
 import           Control.Monad
 import           Control.Monad.Free
@@ -13,8 +14,6 @@ import qualified Data.SBV                     as SBV
 import           System.IO
 import           Test.Hspec
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
-
-import qualified TestPrograms                 as Progs
 
 prettyPrint :: (MonadIO m, PP.Pretty a) => Int -> a -> m ()
 prettyPrint width = liftIO . PP.displayIO stdout . PP.renderSmart 0.6 width . (PP.<> PP.line) . PP.pretty
