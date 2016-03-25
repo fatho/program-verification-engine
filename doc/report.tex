@@ -15,6 +15,7 @@
 \newcommand{\ASSUME}[1]{\ensuremath{\mathbf{assume}\;#1;}}
 \newcommand{\ASSERT}[1]{\ensuremath{\mathbf{assert}\;#1;}}
 \newcommand{\WLP}[2]{\ensuremath{\mathbf{wlp}\;#1\;#2}}
+\newcommand{\REPBY}[2]{\ensuremath{#1\;\mathbf{repby}\;#2}}
 \newcommand{\UNROLLSQ}[3]{\ensuremath{[\mathit{while}]^{#1}(#2, #3)}}
 \newcommand{\UNROLLDI}[3]{\ensuremath{\langle\mathit{while}\rangle^{#1}(#2, #3)}}
 \lstset{
@@ -190,7 +191,7 @@ thing that must be done is to verify the validity of said invariant.
 This can be stated as
 \begin{align}
   I \land \neg g \Rightarrow Q \\
-  I \land g \Rightarrow \WLP S I
+  I \land g \Rightarrow \WLP{S}{I}
 \end{align}
 The SBV solver has to be invoked to verify that these conditions hold, and that
 the invariant supplied by the user is in fact a valid invariant.
@@ -200,10 +201,10 @@ loop
 
 % TODO: Insert inv formula
 \begin{align}
-  \WLP (inv I while g do S) Q &=
+  \WLP{(inv I while g do S)}{Q} &=
     \begin{cases}
-      I, if the provided invariant is valid\\
-      \neg g \land q, otherwise
+      I, \qquad  \mathrm{if \; the \; provided \; invariant \; is \; valid}\\
+      \neg g \land q, \mathrm{otherwise}
     \end{cases}
 \end{align}
 We will see in a subsequent section how to deal with unannotated loops
@@ -212,7 +213,7 @@ We will see in a subsequent section how to deal with unannotated loops
 To deal with array assignment we introduce the following translation
 
 \begin{align}
-  a[i] := e \equiv a := a (i repby e)
+  a[i] := e \qquad \equiv \qquad a := a ( \REPBY{i}{e} )
 \end{align}
 
 Where the newly introduced expression represents an array which is identical to
@@ -221,7 +222,7 @@ Where the newly introduced expression represents an array which is identical to
 This allows us to define the corrisponding wlp as if it were a normal assignment
 
 \begin{align}
-  \WLP (a[i] := e) Q &= Q[a(i repby e) / a]
+  \WLP{(a[i] := e)}{Q} &= Q[a( \REPBY{i}{e} ) / a]
 \end{align}
 
 \subsection{Program Calls}
