@@ -164,9 +164,9 @@ p = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` a
 The WLP transformer is implemented in a custom MonadProver monad we defined.
 The MonadProver provides two basic actions: prove and trace, that respectively
 either prove or provied a counterexample to a supplied predicate, allowing the
-wlp to unfold, and allows us trace debug statements during the whole operation.
+\textbf{wlp} to unfold, and allows us trace debug statements during the whole operation.
 
-As we will see in later sections the there are different ways a wlp computation
+As we will see in later sections the there are different ways a WLP computation
 could be carried on; these differences are abstracted over by a configuration
 that must be provided to the transformer allowing different extensions to the
 WLP behaviour.
@@ -180,7 +180,7 @@ Dealing with most of the basic statements in the GCL language turns out to
 be pretty straightforward. The implementation deals with these basic statements
 exactly as presented in the lectures.
 As a matter of fact: since we used the same datatype both for expressions in GCL
-and the predicates built by the wlp, we managed to reuse the combinators defined
+and the predicates built by the \textbf{wlp}, we managed to reuse the combinators defined
 in the DSL to specify the predicates in the WLP. The effect of this on the code
 is that it writes out almost exactly as in the equations presented in the lectures.
 
@@ -188,7 +188,7 @@ Listing \ref{lst:wlp:basic} shows two simple cases from our WLP implementation.
 As we need to be able to run the prover on the fly, we run the WLP in a monadic context.
 In the case for a block of statements we simply monadicly fold the WLP over all statements.
 The implementation for assertions also follows closely the formal specification of the
-WLP transformer. 
+WLP transformer.
 
 \begin{lstlisting}[caption=WLP implementation example, label=lst:wlp:basic]
   go (AST.Block stmts) q = foldrM go q stmts
@@ -207,7 +207,7 @@ This can be stated as
 The SBV solver has to be invoked to verify that these conditions hold, and that
 the invariant supplied by the user is in fact a valid invariant.
 If the invariant turns out to be invalid, it can still work out if the loop
-is never entered. This gives us the following forumula for the wlp of an annotated
+is never entered. This gives us the following forumula for the \textbf{wlp} of an annotated
 loop
 \begin{align}
   \WLP{(\IWHILE{I}{g}{S})}{Q} &=
@@ -229,7 +229,7 @@ go (AST.InvWhile (Just iv) cnd s) q
   | not alwaysInferInvariant && checkInvariantAnnotation = do
       preInv <- go s iv
       let preserveInv = prepare $ iv /\ cnd ==> preInv
-          postcnd     = prepare $ iv /\ neg cnd ==> q  
+          postcnd     = prepare $ iv /\ neg cnd ==> q
       trace "trying to prove invariant is preserved"
       preserved <- prove preserveInv
       trace "trying to prove post condition"
@@ -267,7 +267,7 @@ This allows us to define the corrisponding wlp as if it were a normal assignment
 
 \subsection{Program Calls}
 
-We can extend the wlp to verify programs which contain calls to other programs.
+We can extend the \textbf{wlp} to verify programs which contain calls to other programs.
 We can think of a program call like a statement with two associated sets:
 the expressions passed to input argument and the output variables.
 External programs can be specified in two different ways: by a complete program or
@@ -275,12 +275,12 @@ just by a specification of the preconditions and postconditions associated with
 the call.
 In the latter case we provide a function that builds the program body by asserting
 its pre-conditions and assuming the post-conditions.
-This allows us to treat both cases uniformly in the wlp function.
+This allows us to treat both cases uniformly in the \textbf{wlp} function.
 The environment is extended with associations between program names and the
 tuple of input/output parameters and program body that completely specify a program
 When a program call is made the body is simply inlined at call site taking care
 of assigning argument expressions to input parameters and output parameters to the result variables.
-Once this program fragment is built the wlp can simply proceed on that.
+Once this program fragment is built the \textbf{wlp} can simply proceed on that.
 
 %==================================================================================================
 \section{Invariant Inference}
@@ -354,11 +354,11 @@ The WLP transformer is implemented as a free monad over WLP computations.
 This allows us to specify different interpreters for the same abstract WLP tree.
 We ended up implementing a handful of different interpreters along the ``main''
 one, which relies on the SBV interface to carry out the proofs in predicate logic.
-Other interpreters that were implemented allowed us to: pretty-print a WLP tree,
+Other interpreters that were implemented allowed us to: \textit{pretty-printer} of WLP trees,
 allowing us to inspect the different branching points and in general providing
-a very useful debugging tool, an interactive interpreter which asks the user
-to carry out the requested proofs and a speculative interpreter which, at branching
-points, immediately proceeds resolving the wlp with all possible outcomes and
+a very useful debugging tool, an \textit{interactive} interpreter which asks the user
+to carry out the requested proofs and a \textit{speculative} interpreter which, at branching
+points, immediately proceeds resolving the \textbf{wlp} with all possible outcomes and
 at a later point prunes the excessive branches when a proof is provided.
 
 \subsection{Handling Quantifiers}
