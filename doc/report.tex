@@ -144,17 +144,30 @@ operations by making use the \emph{Num} type class.
 It also takes care of some implementation details. If-expressions are actually implemented in terms of
 non-deterministic branching in GCL. Furthermore, assignments to arrays like
 \lstinline|a[i] := e| are translated to the corresponding \lstinline|a := a(i repby e)|.
-Listing \ref{fig:prog:example} shows a program swapping two values in an array.
 
-\begin{lstlisting}[caption=A program swapping the values at two indices in an array, label=fig:prog:example]
-p = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` array int] $ do
-  var ["tmp" `as` int, "a_old" `as` array int] $ do
-    "a_old" $= "a"
-    "tmp"     $= "a" ! "i"
-    "a" ! "i" $= "a" ! "j"
-    "a" ! "j" $= "tmp"
-    "a'"      $= "a"
-    assert $ "a'" ! "i" .== "a_old" ! "j" /\ "a'" ! "j" .== "a_old" ! "i"
+Listing \ref{fig:prog:example} shows a program sorting a range $[0\ldots N)$ of an array $a$.
+Program calls like \lstinline|call "minind" ["a", "i" + 1, "N"] ["m"]| mean $m := \mathit{minind}(a, i+1, N)$,
+that is the first list represents the argument expressions and the second list the return variables.
+
+\begin{lstlisting}[caption=Selection sort implemented in our DSL, label=fig:prog:example]
+s = program "sort" [ "a" `as` array int, "N" `as` int] ["ret" `as` array int] $ do
+  assume $ 0 .<= "N"
+  var ["i" `as` int, "m" `as` int, "min" `as` int] $ do
+    "i" $= 0
+    let iv = ("N" .== 0 \/ "i" .<= "N" - 1)
+            /\ forall ("k" `as` int) (0 .<= "k" /\ "k" .< "i" - 1 ==> 
+                 "a" ! "k" .<= "a" ! ("k" + 1))
+            /\ forall ("k" `as` int) (0 .<= "k" /\ "k" .< "i" ==> 
+                 forall ("l" `as` int) ("i" .<= "l" /\ "l" .< "N" ==> "a" ! "k" .<= "a" ! "l"))
+    invWhile (Just iv) ("i" .< "N" - 1) $ do
+      call "minind" ["a", "i" + 1, "N"] ["m"]
+      if_ ("a" ! "m" .< "a" ! "i")
+        (call "swap" ["a", "i", "m"] ["a"])
+        skip
+      "i" $= "i" + 1
+    "ret" $= "a"
+    assert $ forall ("k" `as` int) (0 .<= "k" /\ "k" .< ("N" - 1) ==> 
+               "ret" ! "k" .<= "ret" ! ("k" + 1))
 \end{lstlisting}
 
 %==================================================================================================
