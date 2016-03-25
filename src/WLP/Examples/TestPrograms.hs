@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module TestPrograms where
+module WLP.Examples.TestPrograms where
 
 import           GCL.AST (Program)
 import           GCL.DSL
@@ -7,7 +7,7 @@ import           GCL.DSL
 -- * Examples
 
 allPrograms :: [Either GclError Program]
-allPrograms = [ d1, d2, swap, minind, minindEx, simple, fixpointCheck, callCheck, callCheck2 ]
+allPrograms = [ d1, d2, swap, minind, minindEx, simple, fixpointCheck, callCheck, callCheck2, callSwap ]
 
 d1 :: Either GclError Program
 d1 = program "D1" ["x" `as` int ] ["y" `as` int] $ do
@@ -143,6 +143,14 @@ inc = program "inc" ["x" `as` int] ["r" `as` int] $ do
 
 incSpec :: Either GclError Program
 incSpec = programFromSpec "inc" ["x" `as` int] ["y" `as` int] true ("y" .== "x" + 1)
+
+callSwap :: Either GclError Program
+callSwap = program "callSwap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["r" `as` int] $ do
+  var ["ai" `as` int, "aj" `as` int] $ do
+    "ai" $= "a" ! "i"
+    "aj" $= "a" ! "j"
+    call "swap" ["a", "i", "j"] ["a"]
+    assert ("a" ! "i" .== "aj" /\ "a" ! "j" .== "ai")
 
 loop1 :: Either GclError Program
 loop1 = program "loop1" [] [] $ do
