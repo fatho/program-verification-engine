@@ -119,7 +119,9 @@ in the project assignment description.
 On top of the basic requirements, we also support array assignments, invariant inference and
 program calls. The following sections describe our implementation in greater detail.
 
+%==================================================================================================
 \section{Monadic DSL for the Guarded Common Language}
+%==================================================================================================
 
 Our abstract syntax tree representing programs consists of three levels.
 The root node stores the name of the program, the input and output arguments and a body statement.
@@ -155,7 +157,9 @@ p = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` a
     assert $ "a'" ! "i" .== "a_old" ! "j" /\ "a'" ! "j" .== "a_old" ! "i"
 \end{lstlisting}
 
+%==================================================================================================
 \section{Implementing Predicate Transformer}
+%==================================================================================================
 
 The WLP transformer is implemented in a custom MonadProver monad we defined.
 The MonadProver provides two basic actions: prove and trace, that respectively
@@ -389,12 +393,9 @@ This didn't mean any restriction for our examples though, because all variable d
 result in universal quantifications.
 
 %==================================================================================================
-\section{Conclusion}
+\section{Highlight}
 %==================================================================================================
 
-Using Haskell allowed us to write the WLP implementation in a succinct declarative
-style, closely following the underlying formal definitions.
-
-% TODO: other conlusions
+[This] part of our work is cool, because.....
 
 \end{document}
