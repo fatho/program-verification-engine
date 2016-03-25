@@ -155,13 +155,8 @@ p = program "swap" ["a" `as` array int, "i" `as` int, "j" `as` int] ["a'" `as` a
     assert $ "a'" ! "i" .== "a_old" ! "j" /\ "a'" ! "j" .== "a_old" ! "i"
 \end{lstlisting}
 
-% TODO: maybe listing of the AST types
-
-% TODO: should we add an appendix with all syntactic elements?
-
-
 \section{Implementing Predicate Transformer}
-% TODO: describe general implementation architecture
+
 The WLP transformer is implemented in a custom MonadProver monad we defined.
 The MonadProver provides two basic actions: prove and trace, that respectively
 either prove or provied a counterexample to a supplied predicate, allowing the
@@ -173,10 +168,10 @@ that must be provided to the transformer allowing different extensions to the
 WLP behaviour.
 
 The transformer operates under the partial correctness interpretation, as such
-termination is assumed to guaranteed.
+termination is assumed to be guaranteed.
 
 \subsection{Basic Statements}
-% TODO: not much to say I think, pretty straight forward
+
 Dealing with most of the basic statements in the GCL language turns out to
 be pretty straightforward. The implementation deals with these basic statements
 exactly as presented in the lectures.
@@ -197,7 +192,7 @@ WLP transformer.
 \end{lstlisting}
 
 \subsection{Loops}
-% TODO: describe handling/checking of invariants, code excerpt here
+
 In the case the user provides his loops with an annotated invariant the first
 thing that must be done is to verify the validity of said invariant.
 This can be stated as
@@ -210,8 +205,6 @@ the invariant supplied by the user is in fact a valid invariant.
 If the invariant turns out to be invalid, it can still work out if the loop
 is never entered. This gives us the following forumula for the wlp of an annotated
 loop
-
-% TODO: Insert inv formula
 \begin{align}
   \WLP{(\IWHILE{I}{g}{S})}{Q} &=
     \begin{cases}
@@ -255,37 +248,36 @@ go (AST.InvWhile (Just iv) cnd s) q
 
 
 \subsection{Arrays}
-% TODO: refer to array theory of Z3
-To deal with array assignment we introduce the following translation
 
+To deal with array assignment we introduce the following translation
 \begin{align}
   a[i] := e \qquad \equiv \qquad a := a ( \REPBY{i}{e} )
 \end{align}
-
 Where the newly introduced expression represents an array which is identical to
 \emph{a}, except at position \emph{i} where it has value \emph{e}.
 
 This allows us to define the corrisponding wlp as if it were a normal assignment
-
 \begin{align}
   \WLP{(a[i] := e)}{Q} &= Q[a( \REPBY{i}{e} ) / a]
 \end{align}
 
 \subsection{Program Calls}
-% TODO: describe environment lookup and inlining
-We can extend the wlp the verify programs which contain calls to other programs.
+
+We can extend the wlp to verify programs which contain calls to other programs.
 We can think of a program call like a statement with two associated sets:
-the input and the output parameters.
+the expressions passed to input argument and the output variables.
 External programs can be specified in two different ways: by a complete program or
 just by a specification of the preconditions and postconditions associated with
 the call.
 In the latter case we provide a function that builds the program body by asserting
 its pre-conditions and assuming the post-conditions.
+This allows us to treat both cases uniformly in the wlp function.
 The environment is extended with associations between program names and the
 tuple of input/output parameters and program body that completely specify a program
 When a program call is made the body is simply inlined at call site taking care
-of assigning input and output parameters correctly. Once this program fragment is
-built the wlp can simply procede on that.
+of assigning argument expressions to input parameters and output parameters to the result variables.
+Once this program fragment is built the wlp can simply proceed on that.
+
 %==================================================================================================
 \section{Invariant Inference}
 %==================================================================================================
@@ -323,8 +315,6 @@ We additionally implemented an optional limit to the number of iterations.
 If that limit is exceeded without finding an invariant, we return a precondition that requires
 that the loop will never be executed and the post-condition already holds.
 
-% TODO: anything else about fixpoints?
-
 \subsection{Loop Unrolling}
 
 As an alternative to fixpoint-iteration we can also unroll a loop a finite number of times and
@@ -344,13 +334,15 @@ Formally, those unrollings, named  are defined as follows.
 Our implementation first computes (lazily) the unrolled loop and then applies
 the \textbf{wlp} transformer to the unrolling.
 
-% TODO: anything else about loop unrolling?
-
 %==================================================================================================
 \section{Solver Backend}
 %==================================================================================================
 
-% TODO: general interoduction to the backend
+As mentioned before we rely on the \texttt{sbv} Haskell library for interacting with a theorem prover.
+While it supports multiple provers, we only tested our implementation with Microsoft's Z3 being the
+one with most features.
+The WLP implementation itself is not bound to a specific prover backend and it should be easy to
+add others if necessary.
 
 \subsection{Free Monad Interface}
 
@@ -364,7 +356,6 @@ a very useful debugging tool, an interactive interpreter which asks the user
 to carry out the requested proofs and a speculative interpreter which, at branching
 points, immediately proceeds resolving the wlp with all possible outcomes and
 at a later point prunes the excessive branches when a proof is provided.
-% TODO: describe free monad
 
 \subsection{Handling Quantifiers}
 
@@ -382,7 +373,20 @@ An additional benefit from the conversion to prenex normal form is, that it allo
 us to return a model for all existential quantifications in a SAT proof, as only
 the values of the outermost existentials are returned by the library.
 
-% TODO: describe remaining conversion to SBV (straightforward)
+\subsection{Array Theory}
+
+While the conversion and meaning of integer arithmetic and boolean logic should be
+straightforward, arrays require are more subtle treatment.
+As explained above, array assignments are translated to the $a(\REPBY{i}{e})$ syntax.
+Fortunately, Z3 provides a built-in array theory with two functions \emph{select} and
+\emph{store} directly mapping to array indexing and \emph{repby}.
+The downside is, that the \texttt{sbv} library we use imposes some restrictions on the
+use of arrays and it was not clear to us from the documentation whether these restrictions
+stem directly from Z3 or from the wrapper library.
+Most notable, arrays can only be used existentially during SAT proofs (i.e. only universally
+during validity proofs).
+This didn't mean any restriction for our examples though, because all variable declarations
+result in universal quantifications.
 
 %==================================================================================================
 \section{Conclusion}
