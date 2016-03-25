@@ -22,8 +22,6 @@ library
                      , WLP.Prover.SBV
                      , WLP.Wlp
                      , WLP.Examples.TestPrograms
-  -- other-modules:
-  -- other-extensions:
   ghc-options:         -Wall -threaded -O2
   build-depends:       base
                      , ansi-wl-pprint

@@ -335,16 +335,6 @@ instance Num (Code AST.Expression) where
   fromInteger = litI
 
 -- * Statement DSL
-{-
-class StmtAST ast where
-  type Expr ast :: *
-  skip     :: ast
-  assert   :: Expr ast -> ast
-  assume   :: Expr ast -> ast
-  ndet     :: ast -> ast -> ast
-  while    :: Expr ast -> ast -> ast
-  invWhile :: Expr ast -> Expr ast -> ast -> ast
-  assign   :: -}
 
 skip :: Code ()
 skip = emit $ AST.Skip

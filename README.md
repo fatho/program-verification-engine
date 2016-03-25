@@ -13,9 +13,20 @@ stackage project, in theory guaranteeing reproducible build of Haskell applicati
 `stack` will automatically install the required version of GHC (7.10.3) if not already present
 and download the dependencies from a chosen conflict-free set (`lts-5.3`).
 
-Building the application is then a matter of issueing `stack build`. 
+Building the application is then a matter of issuing `stack build`.
 The tests can be run with `stack test`.
+Benchmarks can be run with `stack bench`
 
 ## Building with Cabal
 
-TODO
+If you choose to use cabal as a build system, the installation procedure is as
+standard. Just navigate to the project root and type
+
+    cabal sandbox init
+    cabal install --only-dependencies --enable-benchmarks --enable-tests
+    cabal build
+
+Once the project is build you can will find the executables in the respective
+folder.
+Tests can be directly run with `cabal test` and similarly, benchmarks can be run
+with `cabal bench`

@@ -164,7 +164,6 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
             postcnd     = prepare $ iv /\ neg cnd ==> q
             -- pass simplified expression to prover: it's easier to read & debug for humans
             -- (provided there's no error in the simplifier of course)
-            --theorem     = AST.quantifyFree (preserveInv /\ postcnd)
 
         trace "trying to prove invariant is preserved"
         preserved <- prove preserveInv
