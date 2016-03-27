@@ -148,12 +148,12 @@ interpretSBV smt outputMode tracePredicate = iterM run where
       liftIO $ putStrLn "Input formula:"
       tracePredicate predi
       liftIO $ do
-        putStrLn "Quantifier free form:"
+        putStrLn "Prenex normal form:"
         print vars
       tracePredicate quantFree
     result <- liftIO $ proveWith smt thm
     runIfTrace (liftIO $ print result)
-    --cont (not $ Z3.modelExists result)
+
     if Z3.modelExists result
       then cont $ Just $ fmap show $ Z3.getModelDictionary result
       else cont Nothing

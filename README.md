@@ -30,3 +30,10 @@ Once the project is build you can will find the executables in the respective
 folder.
 Tests can be directly run with `cabal test` and similarly, benchmarks can be run
 with `cabal bench`
+
+# Running Examples
+
+To run individual examples in trace mode (giving a more detailed view over the inner workings)
+the `example-runner` executable can be used.
+When using stack, it can be run with `stack exec example-runner` and when using cabal with
+`cabal run example-runner`.

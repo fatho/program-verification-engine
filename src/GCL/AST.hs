@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE DeriveAnyClass            #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE FlexibleInstances         #-}
@@ -8,8 +10,7 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE TemplateHaskell           #-}
 {- | Contains the AST of the Guarded Common Language and some related utility functions.
 -}
 module GCL.AST
@@ -21,6 +22,7 @@ module GCL.AST
   , QVar (..)
   , Operator (..)
   , Program (..)
+  , programName, programInput, programOutput, programBody
   , Decl (..)
   , Statement (..)
   , Quantifier (..)
@@ -37,9 +39,9 @@ module GCL.AST
   where
 import           Data.String
 
-import           GHC.Generics (Generic)
 import           Control.DeepSeq
 import           Control.Lens.Plated
+import           Control.Lens.TH
 import           Control.Lens.Traversal
 import           Control.Monad.State
 import           Data.Data
@@ -50,6 +52,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
+import           GHC.Generics                 (Generic)
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 -- | The type of names.
@@ -89,8 +92,12 @@ data Operator = OpLEQ
 instance IsString UVar where
   fromString = UVar
 
-data Program = Program Name [Decl QVar] [Decl QVar] Statement
-  deriving (Eq, Ord, Show, Data, Typeable)
+data Program = Program
+  { _programName   :: Name
+  , _programInput  :: [Decl QVar]
+  , _programOutput :: [Decl QVar]
+  , _programBody   :: Statement
+  } deriving (Eq, Ord, Show, Data, Typeable)
 
 data Decl var = Decl var Type
   deriving (Eq, Ord, Show, Data, Typeable, Generic, NFData)
@@ -131,6 +138,8 @@ data Expression = IntLit Integer
                 | BinOp Operator Expression Expression
                 | Quantify Quantifier (Decl QVar) Expression
   deriving (Eq, Ord, Show, Data, Typeable, Generic, NFData)
+
+makeLenses ''Program
 
 instance Plated Expression where
   plate = uniplate

@@ -2,17 +2,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import qualified GCL.AST                      as AST
 import qualified WLP.Interface                as Prover
 import qualified WLP.Prover.SBV               as SBV
 import qualified WLP.Wlp                      as WLP
 
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
+import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
 import qualified Data.SBV                     as SBV
 import           System.IO
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
+import           Text.Printf
 
 import           WLP.Examples.TestPrograms
 
@@ -48,19 +52,26 @@ interactiveProver = iterM run where
 myConfig :: WLP.WlpConfig Prover.WLP
 myConfig = WLP.defaultConfig `WLP.withProcedures` [incSpec, swapSpec, minindSpec]
 
+validPrograms :: Map String AST.Program
+validPrograms = Map.fromList [ (p ^. AST.programName, p) | Right p <- allPrograms ]
+
 main :: IO ()
 main = do
-  forM_ allPrograms $ \case
-   Left err -> putStrLn err
-   Right prog -> do
-     liftIO $ prettyPrint 100 prog
-     putStrLn ""
-     putStrLn ""
+  putStrLn "Available examples:"
+  forM_ validPrograms $ \prog ->
+    printf "  - %s\n" (prog ^. AST.programName)
 
-     let cfg = myConfig { WLP.invariantInference = WLP.fixpointInference Nothing }
-         wlp = WLP.wlpProgram cfg prog
-     result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 160) wlp
+  putStrLn "Enter name of example to run:"
+  ex <- getLine
+  case Map.lookup ex validPrograms of
+    Nothing -> putStrLn "not found!"
+    Just prog -> do
+      liftIO $ prettyPrint 100 prog
+      printf "\n\n"
 
-     liftIO $ prettyPrint 100 $ result
-     putStrLn ""
-     putStrLn ""
+      let cfg = myConfig { WLP.invariantInference = WLP.fixpointInference Nothing }
+          wlp = WLP.wlpProgram cfg prog
+      result <- SBV.interpretSBV SBV.z3 Prover.TraceMode (prettyPrint 160) wlp
+
+      liftIO $ prettyPrint 100 $ result
+      printf "\n\n"
