@@ -118,6 +118,8 @@ withProcedures config mbprocs =
   in
     config {procedures = M.union (M.fromList procs) (procedures config) }
 
+-- Builds a program fragment from an external program. Some code is generated
+-- to handle input and output variables and the body of the program is inlined.
 embedProgram :: AST.Program -> [AST.Expression] -> [AST.QVar] -> AST.Statement
 embedProgram (AST.Program _ inVars outVars body) args res =
   AST.Var (inVars ++ outVars) $ AST.Block
@@ -141,6 +143,8 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
     p <- case M.lookup pname procedures of
            Nothing -> fail $ "Procedure " ++ pname ++ " not found"
            Just pr -> return pr
+    -- make all variables appearing in the program fragment fresh to avoid name
+    -- clashes when a program is called multiple times
     freshP <- makeProgramFresh p
     let proc = embedProgram freshP args res
     trace "Generated the following program fragment from external call"
@@ -203,6 +207,7 @@ wlp WlpConfig{..} stmt postcond = evalStateT (go stmt postcond) 0 where
 
   prepare = AST.quantifyFree AST.ForAll . AST.makeQuantifiersUnique
 
+-- Recursvely walk down a programs AST and make every variable occurence fresh.
   makeProgramFresh :: MonadState Int m => AST.Program -> m AST.Program
   makeProgramFresh (AST.Program pname inVars outVars body) = do
     freshInVars <- mapM mkFreshVar inVars

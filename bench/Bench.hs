@@ -13,7 +13,11 @@ import qualified Data.SBV                     as SBV
 import           Criterion.Main
 
 
-
+-- Benchmarks show that the parallel version is sligthly better than the
+-- sequential version until the branching factor starts to get over a certain threshold
+-- After that point the performance of the parallel interpreter degrades significantly.
+-- This is possibly because a big number of the spawned threads will end up being cut
+-- so they just end up stealing cpu cycles from the correct threads. 
 main :: IO ()
 main = defaultMain [
   bgroup "sequential"
